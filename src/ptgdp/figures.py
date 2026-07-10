@@ -142,6 +142,45 @@ def domestic_vs_external(adjusted: pd.DataFrame, gdp_growth: pd.Series, path,
     plt.close(fig)
 
 
+def slope_paths(frames: dict, gdp_frame, labels: dict[str, str], regimes: dict,
+                path):
+    """Small multiples of smoothed state-space slope paths with 90% bands.
+
+    Each panel shades the regime windows, marks the zero line, and draws the
+    slope with its band; the GDP-growth path is included as a final panel.
+    """
+    items = list(frames.items())
+    if gdp_frame is not None:
+        items.append(("GDP (system sum)", gdp_frame))
+    n = len(items)
+    ncols = 3
+    nrows = int(np.ceil(n / ncols))
+    fig, axes = plt.subplots(nrows, ncols, figsize=(11, 2.4 * nrows), sharex=True)
+    axes = np.atleast_2d(axes)
+
+    for k, (name, fr) in enumerate(items):
+        ax = axes[k // ncols, k % ncols]
+        t = fr.index.to_timestamp()
+        ax.fill_between(t, fr["lo90"], fr["hi90"], color=PALETTE[k % len(PALETTE)],
+                        alpha=0.25, linewidth=0)
+        ax.plot(t, fr["slope"], lw=1.4, color=PALETTE[k % len(PALETTE)])
+        ax.axhline(0, color="black", lw=0.6)
+        for (start, end) in regimes.values():
+            ax.axvspan(pd.Period(start, "Q").to_timestamp(),
+                       pd.Period(end, "Q").to_timestamp(),
+                       color="#999999", alpha=0.15, linewidth=0)
+        ax.set_title(labels.get(name, name), fontsize=8.5)
+    for k in range(n, nrows * ncols):
+        axes[k // ncols, k % ncols].axis("off")
+
+    fig.suptitle("Smoothed local-linear-trend slope paths with 90% bands "
+                 "(regime windows shaded)", fontsize=10, y=1.0)
+    _credit(fig)
+    fig.tight_layout()
+    fig.savefig(path, bbox_inches="tight")
+    plt.close(fig)
+
+
 def residual_panel(residuals: pd.DataFrame, labels: dict[str, str], path,
                    window: int = 12):
     """Small multiples of residual series with ±2 rolling-σ bands.

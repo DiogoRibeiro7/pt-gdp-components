@@ -14,12 +14,13 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 import pandas as pd
 
 from ptgdp import (config, diagnostics, fetch, figures, import_content, model,
-                   prepare, sublayer)
+                   prepare, stsm, sublayer)
 
 
 def main(refresh: bool = False, clv: pd.DataFrame | None = None,
          cp: pd.DataFrame | None = None, interactions: bool = False,
-         import_content_arg=None, sublayer_flag: bool = False):
+         import_content_arg=None, sublayer_flag: bool = False,
+         stsm_flag: bool = False, stsm_seasonal: bool = False):
     config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     if clv is None:
@@ -145,6 +146,29 @@ def main(refresh: bool = False, clv: pd.DataFrame | None = None,
             print(f"Sub-layer {parent}: {spec['csv']} written; "
                   f"max|reconciliation residual| = {residual.abs().max():.2e}")
 
+    # ---- state-space time-varying slopes (optional) ------------------
+    if stsm_flag:
+        tidy, frames, gdp_frame = stsm.slope_paths(
+            contrib, gdp_growth, seasonal=stsm_seasonal
+        )
+        tidy.to_csv(config.OUTPUT_DIR / "stsm_slopes.csv", index=False)
+        figures.slope_paths(
+            frames, gdp_frame, labels, config.REGIMES,
+            config.OUTPUT_DIR / "slope_paths.png"
+        )
+        print("\nState-space slope paths (quarters where the 90% band excludes zero):")
+        for comp, fr in frames.items():
+            qs = stsm.band_excludes_zero(fr)
+            if len(qs):
+                span = f"{qs.min()}..{qs.max()} ({len(qs)} quarters)"
+            else:
+                span = "never"
+            print(f"  {labels.get(comp, comp):<32} {span}")
+        if gdp_frame is not None:
+            qs = stsm.band_excludes_zero(gdp_frame)
+            print(f"  {'GDP (system sum)':<32} "
+                  f"{f'{qs.min()}..{qs.max()} ({len(qs)} quarters)' if len(qs) else 'never'}")
+
     print(f"\nOutputs written to {config.OUTPUT_DIR}")
     return result
 
@@ -160,6 +184,11 @@ if __name__ == "__main__":
                          "overrides the default shares")
     ap.add_argument("--sublayer", action="store_true",
                     help="annual GFCF-by-asset and consumption-by-purpose breakdowns")
+    ap.add_argument("--stsm", action="store_true",
+                    help="local-linear-trend state-space slope paths")
+    ap.add_argument("--stsm-seasonal", action="store_true", dest="stsm_seasonal",
+                    help="add a stochastic seasonal(4) term to the state-space models")
     args = ap.parse_args()
     main(refresh=args.refresh, interactions=args.interactions,
-         import_content_arg=args.import_content, sublayer_flag=args.sublayer)
+         import_content_arg=args.import_content, sublayer_flag=args.sublayer,
+         stsm_flag=args.stsm, stsm_seasonal=args.stsm_seasonal)
