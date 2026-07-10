@@ -94,6 +94,48 @@ def fit(contrib: pd.DataFrame, gdp_growth: pd.Series, X: pd.DataFrame,
     )
 
 
+def slope_break_tests(contrib: pd.DataFrame, gdp_growth: pd.Series,
+                      X_restricted: pd.DataFrame, X_full: pd.DataFrame,
+                      hac_maxlags: int = 4) -> pd.DataFrame:
+    """Wald test that the regime slope-change interactions are jointly zero.
+
+    ``X_full`` is the design with the ``trend×<regime>`` interaction columns;
+    ``X_restricted`` is the design without them. The added columns are
+    identified as those in ``X_full`` absent from ``X_restricted``, and for
+    each component equation (and the GDP-growth equation) an OLS fit with HAC
+    (Newey-West, maxlags=4) covariance is tested for the joint null that all
+    interaction coefficients are zero.
+
+    A Wald test on the HAC covariance is used rather than a likelihood-ratio
+    or a non-robust F test because the residuals are serially correlated;
+    LR/F assume spherical errors and would over-reject. The chi-square form
+    (``use_f=False``) is reported so the statistic is comparable across
+    equations with the same degrees of freedom.
+
+    Returns a tidy DataFrame: component, wald_stat, df, pvalue.
+    """
+    interaction_cols = [c for c in X_full.columns if c not in X_restricted.columns]
+    Xf = X_full.loc[contrib.index]
+
+    def _one(y: pd.Series) -> tuple[float, int, float]:
+        res = sm.OLS(y.loc[Xf.index], Xf).fit(
+            cov_type="HAC", cov_kwds={"maxlags": hac_maxlags}
+        )
+        R = np.zeros((len(interaction_cols), Xf.shape[1]))
+        for i, col in enumerate(interaction_cols):
+            R[i, Xf.columns.get_loc(col)] = 1.0
+        wt = res.wald_test(R, use_f=False, scalar=True)
+        return float(wt.statistic), len(interaction_cols), float(wt.pvalue)
+
+    rows = []
+    for comp in contrib.columns:
+        stat, df, p = _one(contrib[comp])
+        rows.append({"component": comp, "wald_stat": stat, "df": df, "pvalue": p})
+    stat, df, p = _one(gdp_growth)
+    rows.append({"component": "GDP (system sum)", "wald_stat": stat, "df": df, "pvalue": p})
+    return pd.DataFrame(rows)
+
+
 def regime_means(contrib: pd.DataFrame, gdp_growth: pd.Series,
                  regimes: dict[str, tuple[str, str]]) -> pd.DataFrame:
     """Average contribution per component per regime, plus 'normal' periods."""

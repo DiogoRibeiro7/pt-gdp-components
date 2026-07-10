@@ -16,7 +16,8 @@ import pandas as pd
 from ptgdp import config, fetch, figures, model, prepare
 
 
-def main(refresh: bool = False, clv: pd.DataFrame | None = None):
+def main(refresh: bool = False, clv: pd.DataFrame | None = None,
+         interactions: bool = False):
     config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     if clv is None:
@@ -27,9 +28,18 @@ def main(refresh: bool = False, clv: pd.DataFrame | None = None):
     labels = {k: v["label"] for k, v in comps.items()}
     print(f"Contributions: {contrib.shape[0]} quarters x {contrib.shape[1]} components")
 
-    X = prepare.design_matrix(contrib.index)
+    X = prepare.design_matrix(contrib.index, interactions=interactions)
     result = model.fit(contrib, gdp_growth, X)
     print(f"SUR fit on n={result.nobs}; adding-up gap = {result.adding_up_gap:.2e}")
+
+    if interactions:
+        X_restricted = prepare.design_matrix(contrib.index, interactions=False)
+        wald = model.slope_break_tests(contrib, gdp_growth, X_restricted, X)
+        wald.to_csv(config.OUTPUT_DIR / "slope_break_tests.csv", index=False)
+        print("\nRegime slope-break Wald tests (joint H0: interactions = 0, HAC):")
+        wtbl = wald.copy()
+        wtbl["component"] = [labels.get(c, c) for c in wtbl["component"]]
+        print(wtbl.round(4).to_string(index=False))
 
     # ---- tables -------------------------------------------------------
     tbl = result.summary_table()
@@ -58,7 +68,10 @@ def main(refresh: bool = False, clv: pd.DataFrame | None = None):
     figures.small_multiples(
         contrib, fitted, labels, config.OUTPUT_DIR / "contributions_small_multiples.png"
     )
-    for reg in ["trend", *config.REGIMES]:
+    decomp_regressors = ["trend", *config.REGIMES]
+    if interactions:
+        decomp_regressors += [f"trend_{name}" for name in config.REGIMES]
+    for reg in decomp_regressors:
         figures.coefficient_decomposition(
             result, reg, labels, config.OUTPUT_DIR / f"decomposition_{reg}.png"
         )
@@ -69,4 +82,7 @@ def main(refresh: bool = False, clv: pd.DataFrame | None = None):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--refresh", action="store_true", help="re-download from DBnomics")
-    main(refresh=ap.parse_args().refresh)
+    ap.add_argument("--interactions", action="store_true",
+                    help="add regime-specific trend slopes and Wald slope-break tests")
+    args = ap.parse_args()
+    main(refresh=args.refresh, interactions=args.interactions)

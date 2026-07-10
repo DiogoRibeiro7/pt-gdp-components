@@ -65,17 +65,35 @@ def contributions(
     return contrib, gdp_growth, comps
 
 
-def design_matrix(index: pd.PeriodIndex) -> pd.DataFrame:
+def design_matrix(index: pd.PeriodIndex, interactions: bool = False) -> pd.DataFrame:
     """Common regressors for every equation: intercept, trend, regime dummies.
 
     Trend is in decades so coefficients read as pp of quarterly growth per
     decade; otherwise they are invisibly small.
+
+    With ``interactions=True`` a ``trend×<regime>`` regressor is added for
+    each regime, equal to the regime dummy times the trend re-centred at the
+    start of that regime's window (``trend − trend_at_regime_entry``, zero
+    outside the window). Re-centring makes the two coefficients read cleanly:
+    the dummy is the level shift at regime entry (pp of quarterly growth) and
+    the interaction is the within-regime slope change (pp per decade). The
+    alternative — a raw ``trend×dummy`` product without re-centring — was
+    rejected because it confounds the level shift with the slope, so the
+    dummy would then measure the extrapolated regime effect at t=0 rather
+    than the interpretable jump at regime entry.
     """
     X = pd.DataFrame(index=index)
     X["const"] = 1.0
-    X["trend"] = np.arange(len(index)) / 40.0  # quarters to decades
+    trend = np.arange(len(index)) / 40.0  # quarters to decades
+    X["trend"] = trend
     for name, (start, end) in config.REGIMES.items():
-        X[name] = (
+        dummy = (
             (index >= pd.Period(start, freq="Q")) & (index <= pd.Period(end, freq="Q"))
         ).astype(float)
+        X[name] = dummy
+    if interactions:
+        for name, (start, end) in config.REGIMES.items():
+            pos = int(index.searchsorted(pd.Period(start, freq="Q")))
+            centre = pos / 40.0  # trend value at regime entry
+            X[f"trend_{name}"] = X[name].to_numpy() * (trend - centre)
     return X
