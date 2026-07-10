@@ -1,0 +1,72 @@
+"""End-to-end pipeline: fetch -> contributions -> SUR system -> tables + figures.
+
+Usage:
+    python run_pipeline.py            # uses cached data if present
+    python run_pipeline.py --refresh  # re-downloads from DBnomics
+"""
+
+import argparse
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent / "src"))
+
+import pandas as pd
+
+from ptgdp import config, fetch, figures, model, prepare
+
+
+def main(refresh: bool = False, clv: pd.DataFrame | None = None):
+    config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    if clv is None:
+        clv, _cp = fetch.load_all(refresh=refresh)
+    print(f"Levels: {clv.shape[0]} quarters, {clv.index.min()} -> {clv.index.max()}")
+
+    contrib, gdp_growth, comps = prepare.contributions(clv)
+    labels = {k: v["label"] for k, v in comps.items()}
+    print(f"Contributions: {contrib.shape[0]} quarters x {contrib.shape[1]} components")
+
+    X = prepare.design_matrix(contrib.index)
+    result = model.fit(contrib, gdp_growth, X)
+    print(f"SUR fit on n={result.nobs}; adding-up gap = {result.adding_up_gap:.2e}")
+
+    # ---- tables -------------------------------------------------------
+    tbl = result.summary_table()
+    tbl.to_csv(config.OUTPUT_DIR / "sur_coefficients.csv", index=False)
+
+    rm = model.regime_means(contrib, gdp_growth, config.REGIMES)
+    rm.to_csv(config.OUTPUT_DIR / "regime_means.csv")
+    print("\nAverage contribution to quarterly GDP growth by regime (pp):")
+    print(rm.round(3).to_string())
+
+    print("\nTrend coefficients (pp of quarterly growth per decade, HAC p-values):")
+    trend = pd.DataFrame({
+        "coef": result.params["trend"],
+        "p": result.pvalues["trend"],
+    }).sort_values("coef")
+    trend.index = [labels.get(i, i) for i in trend.index]
+    print(trend.round(3).to_string())
+    print(f"GDP total trend: {result.gdp_params['trend']:+.3f} "
+          f"(p={result.gdp_pvalues['trend']:.3f})")
+
+    # ---- figures ------------------------------------------------------
+    fitted = (X @ result.params.T)[contrib.columns]
+    figures.stacked_contributions(
+        contrib, gdp_growth, labels, config.OUTPUT_DIR / "contributions_stacked.png"
+    )
+    figures.small_multiples(
+        contrib, fitted, labels, config.OUTPUT_DIR / "contributions_small_multiples.png"
+    )
+    for reg in ["trend", *config.REGIMES]:
+        figures.coefficient_decomposition(
+            result, reg, labels, config.OUTPUT_DIR / f"decomposition_{reg}.png"
+        )
+    print(f"\nOutputs written to {config.OUTPUT_DIR}")
+    return result
+
+
+if __name__ == "__main__":
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--refresh", action="store_true", help="re-download from DBnomics")
+    main(refresh=ap.parse_args().refresh)
