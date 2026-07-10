@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).parents[1]))
 import numpy as np
 import pandas as pd
 
-from ptgdp import config
+from ptgdp import config, prepare
 import run_pipeline
 
 rng = np.random.default_rng(7)
@@ -49,13 +49,53 @@ clv["P71"]         = simulate(base["P71"], 0.8, 1.7, -1.5, -1.8)
 clv["P72"]         = simulate(base["P72"], 0.9, 2.0, -1.0, -3.0)
 
 signs = {k: v["sign"] for k, v in config.COMPONENTS.items()}
-clv["B1GQ"] = sum(signs[c] * clv[c] for c in signs)
-# chain-linking non-additivity: perturb GDP slightly away from the exact sum
-clv["B1GQ"] *= 1 + rng.normal(0, 0.0008, n)
+comp_cols = list(signs)
 
-result = run_pipeline.main(clv=clv)
+# Current-price frame consistent with the CLV frame: CP = CLV x a slowly
+# drifting per-component deflator (prices diverge across components over
+# time, which is exactly what makes chain-linked volumes non-additive).
+deflator = pd.DataFrame(index=idx)
+for j, c in enumerate(comp_cols):
+    drift = 0.0006 + 0.0004 * j / len(comp_cols)  # slightly different per component
+    deflator[c] = np.exp(np.arange(n) * drift + rng.normal(0, 0.001, n).cumsum())
+cp = pd.DataFrame(index=idx)
+for c in comp_cols:
+    cp[c] = clv[c] * deflator[c]
+# nominal GDP is additive in current prices
+cp["B1GQ"] = sum(signs[c] * cp[c] for c in comp_cols)
+
+# Build the GDP chain-linked volume as an annual-overlap aggregate of the
+# component volumes, so the exact method reconstructs it near-perfectly while
+# the naive Delta/GDP approximation (which sums CLV-unit differences across
+# components with diverging deflators) carries a larger residual.
+annual_cp = cp.groupby(cp.index.year).sum()
+shares = pd.DataFrame(index=annual_cp.index)
+for c in comp_cols:
+    shares[c] = annual_cp[c] / annual_cp["B1GQ"]
+prev_year = idx.year - 1
+gdp_g = np.zeros(n)
+for c in comp_cols:
+    s_prev = shares[c].reindex(prev_year).to_numpy()
+    ratio = (clv[c] / clv[c].shift(1) - 1.0).to_numpy()
+    gdp_g += signs[c] * np.nan_to_num(s_prev * ratio)
+gdp_level = np.empty(n)
+gdp_level[0] = sum(signs[c] * clv[c].iloc[0] for c in comp_cols)
+for t in range(1, n):
+    gdp_level[t] = gdp_level[t - 1] * (1 + gdp_g[t])
+clv["B1GQ"] = gdp_level
+
+conv = prepare.convention_comparison(clv, cp)
+mae_exact = conv["residual_exact"].abs().mean()
+mae_approx_raw = conv["residual_approx_raw"].abs().mean()
+assert mae_exact < mae_approx_raw, (
+    f"exact residual not smaller than raw approximation: "
+    f"exact={mae_exact:.4g} approx={mae_approx_raw:.4g}"
+)
+
+result = run_pipeline.main(clv=clv, cp=cp)
 
 assert result.adding_up_gap < 1e-8, "coefficient adding-up property failed"
 outputs = list(config.OUTPUT_DIR.glob("*"))
 assert len(outputs) >= 6, f"expected tables+figures, got {outputs}"
-print("\nSMOKE TEST PASSED -", len(outputs), "output files")
+print(f"\nResidual MAE: exact={mae_exact:.4g}  approx_raw={mae_approx_raw:.4g}")
+print("SMOKE TEST PASSED -", len(outputs), "output files")

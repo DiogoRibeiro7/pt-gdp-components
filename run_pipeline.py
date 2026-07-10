@@ -17,16 +17,26 @@ from ptgdp import config, fetch, figures, model, prepare
 
 
 def main(refresh: bool = False, clv: pd.DataFrame | None = None,
-         interactions: bool = False):
+         cp: pd.DataFrame | None = None, interactions: bool = False):
     config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     if clv is None:
-        clv, _cp = fetch.load_all(refresh=refresh)
+        clv, cp = fetch.load_all(refresh=refresh)
+    elif cp is None:
+        raise ValueError("pass the current-price (cp) frame alongside clv")
     print(f"Levels: {clv.shape[0]} quarters, {clv.index.min()} -> {clv.index.max()}")
 
-    contrib, gdp_growth, comps = prepare.contributions(clv)
+    contrib, gdp_growth, comps = prepare.contributions(clv, cp, method="exact")
     labels = {k: v["label"] for k, v in comps.items()}
     print(f"Contributions: {contrib.shape[0]} quarters x {contrib.shape[1]} components")
+
+    # ---- chain-linking convention comparison --------------------------
+    conv = prepare.convention_comparison(clv, cp)
+    conv.to_csv(config.OUTPUT_DIR / "convention_comparison.csv")
+    print("\nChain-linking residual by convention (pp of quarterly growth):")
+    for col in ["residual_exact", "residual_approx_raw", "residual_approx_reallocated"]:
+        print(f"  {col:<28} mean={conv[col].mean():+.4f}  "
+              f"max|.|={conv[col].abs().max():.4f}")
 
     X = prepare.design_matrix(contrib.index, interactions=interactions)
     result = model.fit(contrib, gdp_growth, X)

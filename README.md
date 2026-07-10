@@ -15,11 +15,15 @@ prices for nominal weights. Vintages that publish inventories only as
 
 ## Method
 
-1. **Contributions.** `contrib_{i,t} = sign_i · ΔX_{i,t} / GDP_{t-1} · 100`,
-   the standard CLV approximation. Chain-linked volumes are non-additive,
-   so the residual against GDP growth is computed explicitly and
-   reallocated proportionally (or kept as a column with
-   `allocate_residual=False`).
+1. **Contributions.** Default is the annual-overlap exact method,
+   `contrib_{i,t} = sign_i · s_{i,y(t)-1} · (X_{i,t}/X_{i,t-1} − 1) · 100`,
+   with `s` the previous-year current-price share of the component in
+   nominal GDP. The naive `sign_i · ΔX_{i,t} / GDP_{t-1} · 100`
+   approximation is kept as a robustness check (`contributions_approx`).
+   Chain-linked volumes are non-additive, so any residual against GDP
+   growth is computed explicitly and reallocated proportionally (or kept as
+   a column with `allocate_residual=False`); `convention_comparison`
+   reports the residuals side by side.
 2. **System estimation.** Each component's contribution is regressed on a
    common design (intercept, trend in decades, GFC/troika dummy 2008Q3–
    2013Q4, pandemic dummy 2020Q1–2021Q4). With identical regressors, SUR
@@ -51,8 +55,17 @@ python tests/smoke_synthetic.py    # offline end-to-end check
 
 ## Known limitations
 
-- The proportional reallocation of the chain-linking residual is a
-  convention, not a statistical model; for published figures, state it.
+- Contributions use the annual-overlap exact method by default: each
+  component's quarter-on-quarter volume ratio is weighted by its
+  previous-year current-price share of nominal GDP, the additive
+  decomposition consistent with chain-linked Laspeyres volumes. The naive
+  `ΔX/GDP` approximation is retained only as a robustness check
+  (`contributions_approx`); `convention_comparison` and
+  `output/convention_comparison.csv` quantify the residual each convention
+  leaves against GDP growth before any reallocation. A small residual still
+  remains under the exact method (chain-linking binds annually, GDP growth
+  is quarter-on-quarter) and is reallocated proportionally so the SUR
+  adding-up identity closes.
 - Import contributions are gross: a demand-side attribution of imports
   (import-content-adjusted contributions, à la Banco de Portugal) requires
   input–output weights and is out of scope here.
