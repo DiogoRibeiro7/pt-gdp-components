@@ -1,5 +1,6 @@
 pandas>=2.0
 statsmodels>=0.14
+scipy>=1.10
 matplotlib>=3.7
 dbnomics>=1.2
 pyarrow>=14

@@ -13,15 +13,15 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 import pandas as pd
 
-from ptgdp import (config, diagnostics, fetch, figures, import_content, model,
-                   prepare, stsm, sublayer, vecm)
+from ptgdp import (backtest, config, diagnostics, fetch, figures, import_content,
+                   model, prepare, stsm, sublayer, vecm)
 
 
 def main(refresh: bool = False, clv: pd.DataFrame | None = None,
          cp: pd.DataFrame | None = None, interactions: bool = False,
          import_content_arg=None, sublayer_flag: bool = False,
          stsm_flag: bool = False, stsm_seasonal: bool = False,
-         vecm_flag: bool = False):
+         vecm_flag: bool = False, backtest_flag: bool = False):
     config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     if clv is None:
@@ -183,6 +183,16 @@ def main(refresh: bool = False, clv: pd.DataFrame | None = None,
                 alpha_selected, labels, config.OUTPUT_DIR / "vecm_alpha_heatmap.png"
             )
 
+    # ---- pseudo-out-of-sample backtest (optional) --------------------
+    if backtest_flag:
+        bt, _fc = backtest.backtest(contrib, gdp_growth, X, start="2010Q1")
+        bt.to_csv(config.OUTPUT_DIR / "backtest.csv", index=False)
+        print("\nPseudo-out-of-sample backtest (one-quarter-ahead GDP growth):")
+        print(bt.round(4).to_string(index=False))
+        print("Diebold-Mariano vs AR(1): positive stat => model loses to the "
+              "benchmark; a decomposition\nthat cannot beat AR(1) is a "
+              "specification check passed, not a forecasting win.")
+
     print(f"\nOutputs written to {config.OUTPUT_DIR}")
     return result
 
@@ -204,8 +214,10 @@ if __name__ == "__main__":
                     help="add a stochastic seasonal(4) term to the state-space models")
     ap.add_argument("--vecm", action="store_true",
                     help="Johansen + VECM on log CLV component levels")
+    ap.add_argument("--backtest", action="store_true",
+                    help="expanding-window one-step-ahead GDP-growth backtest")
     args = ap.parse_args()
     main(refresh=args.refresh, interactions=args.interactions,
          import_content_arg=args.import_content, sublayer_flag=args.sublayer,
          stsm_flag=args.stsm, stsm_seasonal=args.stsm_seasonal,
-         vecm_flag=args.vecm)
+         vecm_flag=args.vecm, backtest_flag=args.backtest)

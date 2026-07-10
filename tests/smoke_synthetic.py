@@ -113,7 +113,15 @@ close = (recon.loc[common] - parent_annual.loc[common]).abs().max()
 assert close < 1e-9, f"sub-layer reconciliation did not close, gap {close:.2e}"
 assert resid.abs().max() < 1e-9, "reconciliation residual not closed"
 
-result = run_pipeline.main(clv=clv, cp=cp, stsm_flag=True, vecm_flag=True)
+result = run_pipeline.main(clv=clv, cp=cp, stsm_flag=True, vecm_flag=True,
+                           backtest_flag=True)
+
+# backtest ran with DM p-values present
+bt_df = pd.read_csv(config.OUTPUT_DIR / "backtest.csv")
+assert {"model", "rmse_full", "mae_full", "dm_stat_vs_ar1",
+        "dm_pvalue_vs_ar1"}.issubset(bt_df.columns)
+non_bench = bt_df[bt_df["model"].str.contains("benchmark") == False]  # noqa: E712
+assert non_bench["dm_pvalue_vs_ar1"].notna().all(), "DM p-values missing"
 
 # state-space slope paths ran without an unhandled convergence failure
 stsm_csv = config.OUTPUT_DIR / "stsm_slopes.csv"
