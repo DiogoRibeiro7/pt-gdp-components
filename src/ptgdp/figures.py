@@ -97,6 +97,51 @@ def small_multiples(contrib: pd.DataFrame, fitted: pd.DataFrame,
     plt.close(fig)
 
 
+def domestic_vs_external(adjusted: pd.DataFrame, gdp_growth: pd.Series, path,
+                         annual: bool = True):
+    """Stacked area of net domestic-demand vs net-export contributions.
+
+    ``adjusted`` is the import-content-adjusted (net) contribution frame from
+    :func:`import_content.adjusted_contributions`; export columns
+    (``config.EXPORT_ITEMS``) are summed into net external demand and the
+    remainder into net domestic demand. GDP growth is overlaid as a check that
+    the two net blocks add back up.
+    """
+    export_cols = [c for c in config.EXPORT_ITEMS if c in adjusted.columns]
+    domestic_cols = [c for c in adjusted.columns if c not in export_cols]
+    external = adjusted[export_cols].sum(axis=1)
+    domestic = adjusted[domestic_cols].sum(axis=1)
+
+    if annual:
+        external = external.groupby(external.index.year).sum()
+        domestic = domestic.groupby(domestic.index.year).sum()
+        g = gdp_growth.groupby(gdp_growth.index.year).sum()
+        x = external.index.to_numpy()
+        note = "annualised (sum of quarterly contributions)"
+    else:
+        g = gdp_growth
+        x = np.arange(len(external))
+        note = "quarterly"
+
+    fig, ax = plt.subplots(figsize=(11, 5.5))
+    ax.stackplot(
+        x, domestic.to_numpy(), external.to_numpy(),
+        labels=["Net domestic demand", "Net external demand (exports)"],
+        colors=["#1f6f8b", "#e07a5f"], alpha=0.9,
+    )
+    ax.plot(x, g.to_numpy(), color="black", lw=1.6, marker="o", ms=2.5,
+            label="GDP growth")
+    ax.axhline(0, color="black", lw=0.8)
+    ax.set_ylabel(f"pp of GDP growth, {note}")
+    ax.set_title("Portugal - import-content-adjusted contributions: "
+                 "domestic vs external demand")
+    ax.legend(loc="lower left", fontsize=8, framealpha=0.9)
+    _credit(fig)
+    fig.tight_layout()
+    fig.savefig(path, bbox_inches="tight")
+    plt.close(fig)
+
+
 def coefficient_decomposition(result, regressor: str, labels: dict[str, str], path):
     """How the GDP-level coefficient on `regressor` splits across components."""
     coefs = result.params[regressor].sort_values()

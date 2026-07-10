@@ -28,6 +28,10 @@ COMPONENTS = {
 
 GDP_ITEM = "B1GQ"
 
+# Export components, used to split net contributions into external demand
+# (exports) vs domestic demand (everything else) after import-content adjustment.
+EXPORT_ITEMS = ("P61", "P62")
+
 # Some vintages publish P52 and P53 only as combined P52_P53; the fetch
 # layer falls back to the combined series and the prepare layer handles
 # whichever set arrives.

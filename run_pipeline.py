@@ -13,11 +13,12 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 import pandas as pd
 
-from ptgdp import config, fetch, figures, model, prepare
+from ptgdp import config, fetch, figures, import_content, model, prepare
 
 
 def main(refresh: bool = False, clv: pd.DataFrame | None = None,
-         cp: pd.DataFrame | None = None, interactions: bool = False):
+         cp: pd.DataFrame | None = None, interactions: bool = False,
+         import_content_arg=None):
     config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     if clv is None:
@@ -85,6 +86,24 @@ def main(refresh: bool = False, clv: pd.DataFrame | None = None,
         figures.coefficient_decomposition(
             result, reg, labels, config.OUTPUT_DIR / f"decomposition_{reg}.png"
         )
+
+    # ---- import-content adjustment (optional) -------------------------
+    if import_content_arg is not None:
+        if isinstance(import_content_arg, str):
+            shares = import_content.load_import_content(import_content_arg)
+            print(f"\nImport-content shares loaded from {import_content_arg}")
+        else:
+            shares = dict(import_content.DEFAULT_IMPORT_CONTENT)
+            print("\nImport-content shares: hardcoded defaults "
+                  "(REPLACE_WITH_CURRENT_VINTAGE)")
+        adjusted = import_content.adjusted_contributions(contrib, shares)
+        adjusted.to_csv(config.OUTPUT_DIR / "adjusted_contributions.csv")
+        figures.domestic_vs_external(
+            adjusted, gdp_growth, config.OUTPUT_DIR / "domestic_vs_external.png"
+        )
+        gap = float((adjusted.sum(axis=1) - gdp_growth).abs().max())
+        print(f"Adjusted contributions written; adding-up gap = {gap:.2e}")
+
     print(f"\nOutputs written to {config.OUTPUT_DIR}")
     return result
 
@@ -94,5 +113,10 @@ if __name__ == "__main__":
     ap.add_argument("--refresh", action="store_true", help="re-download from DBnomics")
     ap.add_argument("--interactions", action="store_true",
                     help="add regime-specific trend slopes and Wald slope-break tests")
+    ap.add_argument("--import-content", nargs="?", const=True, default=None,
+                    metavar="PATH", dest="import_content",
+                    help="import-content-adjusted contributions; optional CSV path "
+                         "overrides the default shares")
     args = ap.parse_args()
-    main(refresh=args.refresh, interactions=args.interactions)
+    main(refresh=args.refresh, interactions=args.interactions,
+         import_content_arg=args.import_content)

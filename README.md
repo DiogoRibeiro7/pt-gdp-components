@@ -66,8 +66,11 @@ python tests/smoke_synthetic.py    # offline end-to-end check
   remains under the exact method (chain-linking binds annually, GDP growth
   is quarter-on-quarter) and is reallocated proportionally so the SUR
   adding-up identity closes.
-- Import contributions are gross: a demand-side attribution of imports
-  (import-content-adjusted contributions, à la Banco de Portugal) requires
-  input–output weights and is out of scope here.
+- Import contributions are gross by default. A demand-side attribution
+  (import-content-adjusted contributions, à la Banco de Portugal) is
+  available via `--import-content[=path]`: it reallocates the total import
+  block across final-demand components using an exogenous import-content
+  matrix (hardcoded placeholder shares flagged `REPLACE_WITH_CURRENT_VINTAGE`,
+  or a user CSV). The input–output vintage is an input, never fetched.
 - Regime dummies shift means only; interact them with `trend` in
   `prepare.design_matrix` for regime-specific slopes.
