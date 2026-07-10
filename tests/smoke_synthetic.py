@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).parents[1]))
 import numpy as np
 import pandas as pd
 
-from ptgdp import config, prepare
+from ptgdp import config, prepare, sublayer
 import run_pipeline
 
 rng = np.random.default_rng(7)
@@ -91,6 +91,27 @@ assert mae_exact < mae_approx_raw, (
     f"exact residual not smaller than raw approximation: "
     f"exact={mae_exact:.4g} approx={mae_approx_raw:.4g}"
 )
+
+# --- sub-component layer reconciliation (B1) -----------------------------
+contrib_q, _gq, _cq = prepare.contributions(clv, cp, method="exact")
+parent_level = clv["P51G"].groupby(clv.index.year).sum()
+child_fracs = {"assetA": 0.5, "assetB": 0.3, "assetC": 0.2}
+child_levels = pd.DataFrame(index=parent_level.index)
+for name, frac in child_fracs.items():
+    # sub-0.5% per-child non-additivity noise so children sum to the parent closely
+    child_levels[name] = parent_level.to_numpy() * frac * (
+        1 + rng.normal(0, 0.0012, len(parent_level))
+    )
+coverage = (child_levels.sum(axis=1) / parent_level - 1.0).abs().max()
+assert coverage < 0.005, f"synthetic children deviate from parent by {coverage:.4f}"
+
+tidy, resid = sublayer.within_component_decomposition(contrib_q["P51G"], child_levels)
+parent_annual = contrib_q["P51G"].groupby(contrib_q.index.year).sum()
+recon = tidy.groupby("year")["contribution_pp"].sum()
+common = recon.index.intersection(parent_annual.index.astype(int))
+close = (recon.loc[common] - parent_annual.loc[common]).abs().max()
+assert close < 1e-9, f"sub-layer reconciliation did not close, gap {close:.2e}"
+assert resid.abs().max() < 1e-9, "reconciliation residual not closed"
 
 result = run_pipeline.main(clv=clv, cp=cp)
 

@@ -13,12 +13,12 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 import pandas as pd
 
-from ptgdp import config, fetch, figures, import_content, model, prepare
+from ptgdp import config, fetch, figures, import_content, model, prepare, sublayer
 
 
 def main(refresh: bool = False, clv: pd.DataFrame | None = None,
          cp: pd.DataFrame | None = None, interactions: bool = False,
-         import_content_arg=None):
+         import_content_arg=None, sublayer_flag: bool = False):
     config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     if clv is None:
@@ -104,6 +104,23 @@ def main(refresh: bool = False, clv: pd.DataFrame | None = None,
         gap = float((adjusted.sum(axis=1) - gdp_growth).abs().max())
         print(f"Adjusted contributions written; adding-up gap = {gap:.2e}")
 
+    # ---- annual sub-component layer (optional) ------------------------
+    if sublayer_flag:
+        for parent, spec in config.SUBLAYERS.items():
+            if parent not in contrib.columns:
+                continue
+            child_levels = fetch.fetch_annual(
+                spec["dataset"], spec["items"], config.UNIT_CLV
+            )
+            tidy, residual = sublayer.within_component_decomposition(
+                contrib[parent], child_levels
+            )
+            tidy.to_csv(config.OUTPUT_DIR / spec["csv"], index=False)
+            fig_path = config.OUTPUT_DIR / spec["csv"].replace(".csv", ".png")
+            figures.sublayer_stacked(tidy, spec["title"], fig_path)
+            print(f"Sub-layer {parent}: {spec['csv']} written; "
+                  f"max|reconciliation residual| = {residual.abs().max():.2e}")
+
     print(f"\nOutputs written to {config.OUTPUT_DIR}")
     return result
 
@@ -117,6 +134,8 @@ if __name__ == "__main__":
                     metavar="PATH", dest="import_content",
                     help="import-content-adjusted contributions; optional CSV path "
                          "overrides the default shares")
+    ap.add_argument("--sublayer", action="store_true",
+                    help="annual GFCF-by-asset and consumption-by-purpose breakdowns")
     args = ap.parse_args()
     main(refresh=args.refresh, interactions=args.interactions,
-         import_content_arg=args.import_content)
+         import_content_arg=args.import_content, sublayer_flag=args.sublayer)

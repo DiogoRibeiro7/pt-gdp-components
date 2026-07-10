@@ -142,6 +142,37 @@ def domestic_vs_external(adjusted: pd.DataFrame, gdp_growth: pd.Series, path,
     plt.close(fig)
 
 
+def sublayer_stacked(tidy: pd.DataFrame, title: str, path):
+    """Stacked annual bars of a parent contribution split by child.
+
+    ``tidy`` is the frame from
+    :func:`sublayer.within_component_decomposition` (year, child,
+    contribution_pp, share_of_parent).
+    """
+    wide = tidy.pivot(index="year", columns="child", values="contribution_pp")
+    x = wide.index.to_numpy()
+    fig, ax = plt.subplots(figsize=(11, 5.5))
+    pos_bottom = np.zeros(len(wide))
+    neg_bottom = np.zeros(len(wide))
+    for i, col in enumerate(wide.columns):
+        vals = wide[col].to_numpy()
+        bottom = np.where(vals >= 0, pos_bottom, neg_bottom)
+        ax.bar(x, vals, bottom=bottom, width=0.8,
+               color=PALETTE[i % len(PALETTE)], label=col, linewidth=0)
+        pos_bottom += np.clip(vals, 0, None)
+        neg_bottom += np.clip(vals, None, 0)
+    ax.plot(x, wide.sum(axis=1).to_numpy(), color="black", lw=1.6, marker="o",
+            ms=3, label="parent total")
+    ax.axhline(0, color="black", lw=0.8)
+    ax.set_ylabel("pp of GDP growth, annual (sum of quarterly contributions)")
+    ax.set_title(title)
+    ax.legend(loc="lower left", fontsize=7, ncol=2, framealpha=0.9)
+    _credit(fig)
+    fig.tight_layout()
+    fig.savefig(path, bbox_inches="tight")
+    plt.close(fig)
+
+
 def coefficient_decomposition(result, regressor: str, labels: dict[str, str], path):
     """How the GDP-level coefficient on `regressor` splits across components."""
     coefs = result.params[regressor].sort_values()

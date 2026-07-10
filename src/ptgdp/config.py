@@ -43,6 +43,23 @@ REGIMES = {
     "pandemic": ("2020Q1", "2021Q4"),
 }
 
+# Annual sub-component breakdowns (Lane B1). Each maps a quarterly parent
+# component to an annual Eurostat breakdown dataset and the codes to request.
+SUBLAYERS = {
+    "P51G": {
+        "dataset": "nama_10_an6",
+        "items": ["N111", "N112", "N1131", "N1132", "N11O", "N115", "N117"],
+        "csv": "gfcf_by_asset.csv",
+        "title": "Portugal - GFCF contribution split by asset type",
+    },
+    "P31_S14_S15": {
+        "dataset": "nama_10_co3_p3",
+        "items": [f"CP{n:02d}" for n in range(1, 13)],
+        "csv": "consumption_by_purpose.csv",
+        "title": "Portugal - household consumption contribution split by COICOP purpose",
+    },
+}
+
 # Sample window (namq_10_gdp for PT is dense from the mid-1990s onward).
 SAMPLE_START = "1995Q1"
 

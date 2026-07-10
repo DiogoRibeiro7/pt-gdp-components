@@ -59,6 +59,49 @@ def load_all(refresh: bool = False) -> tuple[pd.DataFrame, pd.DataFrame]:
     return load(config.UNIT_CLV, refresh), load(config.UNIT_CP, refresh)
 
 
+# Annual breakdown datasets and the DBnomics dimension carrying their split.
+_ANNUAL_DATASETS = {
+    "nama_10_an6": "asset",       # GFCF by AN_F6 asset type
+    "nama_10_co3_p3": "coicop",   # household consumption by COICOP purpose
+}
+
+
+def fetch_annual(dataset: str, items: list[str], unit: str) -> pd.DataFrame:
+    """Fetch an annual Eurostat breakdown (chain-linked volumes) via DBnomics.
+
+    Supports ``nama_10_an6`` (GFCF by AN_F6 asset: N111, N112, N1131, N1132,
+    N11O, N115, N117 and relatives) and ``nama_10_co3_p3`` (household
+    consumption by COICOP CP01..CP12), geo=PT. The data is annual and is
+    returned as annual (year-indexed) — it is never interpolated to quarterly,
+    since interpolation would invent within-year dynamics the source does not
+    contain. The breakdown codes actually present in the response are logged;
+    requested codes with no data are dropped rather than filled.
+    """
+    from dbnomics import fetch_series
+
+    if dataset not in _ANNUAL_DATASETS:
+        raise ValueError(f"unsupported annual dataset {dataset!r}; "
+                         f"expected one of {list(_ANNUAL_DATASETS)}")
+    dim = _ANNUAL_DATASETS[dataset]
+    dims = {"freq": ["A"], "unit": [unit], "geo": [config.GEO], dim: list(items)}
+    raw = fetch_series("Eurostat", dataset, dimensions=dims)
+    if raw.empty:
+        raise RuntimeError(f"DBnomics returned no data for {dataset} unit={unit}")
+
+    raw = raw[raw["value"].notna()]
+    present = sorted(raw[dim].unique())
+    missing = [i for i in items if i not in present]
+    print(f"[fetch_annual] {dataset}: found {present}"
+          + (f"; requested-but-missing {missing}" if missing else ""))
+
+    wide = (
+        raw.pivot_table(index="original_period", columns=dim, values="value")
+        .rename_axis(index="year", columns=None)
+    )
+    wide.index = pd.PeriodIndex(wide.index, freq="A").year
+    return wide.sort_index()
+
+
 if __name__ == "__main__":
     clv, cp = load_all(refresh=True)
     print("CLV:", clv.shape, clv.index.min(), "->", clv.index.max())
