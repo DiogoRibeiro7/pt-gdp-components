@@ -113,7 +113,7 @@ close = (recon.loc[common] - parent_annual.loc[common]).abs().max()
 assert close < 1e-9, f"sub-layer reconciliation did not close, gap {close:.2e}"
 assert resid.abs().max() < 1e-9, "reconciliation residual not closed"
 
-result = run_pipeline.main(clv=clv, cp=cp, stsm_flag=True)
+result = run_pipeline.main(clv=clv, cp=cp, stsm_flag=True, vecm_flag=True)
 
 # state-space slope paths ran without an unhandled convergence failure
 stsm_csv = config.OUTPUT_DIR / "stsm_slopes.csv"
@@ -121,6 +121,12 @@ assert stsm_csv.exists(), "stsm_slopes.csv not written"
 stsm_df = pd.read_csv(stsm_csv)
 assert {"quarter", "component", "slope", "lo90", "hi90"}.issubset(stsm_df.columns)
 assert (stsm_df["component"] == "sum_minus_gdp_gap").any(), "model-consistency gap missing"
+
+# VECM ran and wrote the Johansen table and stacked alpha sensitivity tables
+assert (config.OUTPUT_DIR / "vecm_johansen.csv").exists(), "vecm_johansen.csv missing"
+alpha_df = pd.read_csv(config.OUTPUT_DIR / "vecm_alpha.csv")
+assert {"rank", "component", "relation", "alpha"}.issubset(alpha_df.columns)
+assert alpha_df["rank"].nunique() >= 1, "no VECM alpha tables written"
 
 assert result.adding_up_gap < 1e-8, "coefficient adding-up property failed"
 

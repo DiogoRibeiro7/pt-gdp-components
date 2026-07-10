@@ -249,6 +249,41 @@ def sublayer_stacked(tidy: pd.DataFrame, title: str, path):
     plt.close(fig)
 
 
+def vecm_alpha_heatmap(alpha_selected: pd.DataFrame, labels: dict[str, str], path):
+    """Heatmap of the VECM alpha (loading) matrix with significance stars.
+
+    ``alpha_selected`` is the tidy alpha table for the selected rank
+    (component, relation, alpha, pvalue). Stars: * p<0.1, ** p<0.05, *** p<0.01.
+    """
+    mat = alpha_selected.pivot(index="component", columns="relation", values="alpha")
+    pmat = alpha_selected.pivot(index="component", columns="relation", values="pvalue")
+    rows = list(mat.index)
+    cols = list(mat.columns)
+
+    fig, ax = plt.subplots(figsize=(1.6 * len(cols) + 3, 0.5 * len(rows) + 1.5))
+    vmax = np.nanmax(np.abs(mat.to_numpy())) or 1.0
+    im = ax.imshow(mat.to_numpy(), cmap="RdBu_r", vmin=-vmax, vmax=vmax, aspect="auto")
+
+    def _stars(p):
+        if not np.isfinite(p):
+            return ""
+        return "***" if p < 0.01 else "**" if p < 0.05 else "*" if p < 0.1 else ""
+
+    for i, r in enumerate(rows):
+        for j, c in enumerate(cols):
+            val = mat.loc[r, c]
+            ax.text(j, i, f"{val:+.2f}{_stars(pmat.loc[r, c])}",
+                    ha="center", va="center", fontsize=7.5, color="black")
+    ax.set_xticks(range(len(cols)), cols, fontsize=8)
+    ax.set_yticks(range(len(rows)), [labels.get(r, r) for r in rows], fontsize=8)
+    ax.set_title("VECM adjustment loadings (alpha) — who corrects the disequilibrium")
+    fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label="alpha")
+    _credit(fig)
+    fig.tight_layout()
+    fig.savefig(path, bbox_inches="tight")
+    plt.close(fig)
+
+
 def coefficient_decomposition(result, regressor: str, labels: dict[str, str], path):
     """How the GDP-level coefficient on `regressor` splits across components."""
     coefs = result.params[regressor].sort_values()

@@ -14,13 +14,14 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 import pandas as pd
 
 from ptgdp import (config, diagnostics, fetch, figures, import_content, model,
-                   prepare, stsm, sublayer)
+                   prepare, stsm, sublayer, vecm)
 
 
 def main(refresh: bool = False, clv: pd.DataFrame | None = None,
          cp: pd.DataFrame | None = None, interactions: bool = False,
          import_content_arg=None, sublayer_flag: bool = False,
-         stsm_flag: bool = False, stsm_seasonal: bool = False):
+         stsm_flag: bool = False, stsm_seasonal: bool = False,
+         vecm_flag: bool = False):
     config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     if clv is None:
@@ -169,6 +170,19 @@ def main(refresh: bool = False, clv: pd.DataFrame | None = None,
             print(f"  {'GDP (system sum)':<32} "
                   f"{f'{qs.min()}..{qs.max()} ({len(qs)} quarters)' if len(qs) else 'never'}")
 
+    # ---- VECM long-run structure (optional) --------------------------
+    if vecm_flag:
+        joh_df, alpha_all, alpha_selected, k_ar_diff, rank = vecm.run(clv)
+        joh_df.to_csv(config.OUTPUT_DIR / "vecm_johansen.csv", index=False)
+        alpha_all.to_csv(config.OUTPUT_DIR / "vecm_alpha.csv", index=False)
+        print(f"\nVECM: k_ar_diff={k_ar_diff} (BIC), Johansen 5%-selected rank={rank} "
+              f"(descriptive; size-distorted at this sample).")
+        print(joh_df.round(3).to_string(index=False))
+        if alpha_selected is not None:
+            figures.vecm_alpha_heatmap(
+                alpha_selected, labels, config.OUTPUT_DIR / "vecm_alpha_heatmap.png"
+            )
+
     print(f"\nOutputs written to {config.OUTPUT_DIR}")
     return result
 
@@ -188,7 +202,10 @@ if __name__ == "__main__":
                     help="local-linear-trend state-space slope paths")
     ap.add_argument("--stsm-seasonal", action="store_true", dest="stsm_seasonal",
                     help="add a stochastic seasonal(4) term to the state-space models")
+    ap.add_argument("--vecm", action="store_true",
+                    help="Johansen + VECM on log CLV component levels")
     args = ap.parse_args()
     main(refresh=args.refresh, interactions=args.interactions,
          import_content_arg=args.import_content, sublayer_flag=args.sublayer,
-         stsm_flag=args.stsm, stsm_seasonal=args.stsm_seasonal)
+         stsm_flag=args.stsm, stsm_seasonal=args.stsm_seasonal,
+         vecm_flag=args.vecm)
