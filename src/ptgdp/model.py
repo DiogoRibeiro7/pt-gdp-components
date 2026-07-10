@@ -33,6 +33,7 @@ class SURResult:
     gdp_pvalues: pd.Series
     adding_up_gap: float          # max |sum of component betas - gdp beta|
     resid: pd.DataFrame = field(repr=False)
+    gdp_resid: pd.Series = field(default=None, repr=False)  # GDP-equation residual
     nobs: int = 0
 
     def summary_table(self) -> pd.DataFrame:
@@ -90,6 +91,7 @@ def fit(contrib: pd.DataFrame, gdp_growth: pd.Series, X: pd.DataFrame,
         gdp_pvalues=gdp_res.pvalues,
         adding_up_gap=gap,
         resid=pd.DataFrame(resids),
+        gdp_resid=gdp_res.resid,
         nobs=int(gdp_res.nobs),
     )
 

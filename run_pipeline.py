@@ -13,7 +13,8 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 import pandas as pd
 
-from ptgdp import config, fetch, figures, import_content, model, prepare, sublayer
+from ptgdp import (config, diagnostics, fetch, figures, import_content, model,
+                   prepare, sublayer)
 
 
 def main(refresh: bool = False, clv: pd.DataFrame | None = None,
@@ -86,6 +87,29 @@ def main(refresh: bool = False, clv: pd.DataFrame | None = None,
         figures.coefficient_decomposition(
             result, reg, labels, config.OUTPUT_DIR / f"decomposition_{reg}.png"
         )
+
+    # ---- residual diagnostics battery (unconditional) -----------------
+    resid_frame = result.resid.copy()
+    resid_frame["GDP (system sum)"] = result.gdp_resid
+    diag = diagnostics.diagnostics_battery(
+        {name: resid_frame[name] for name in resid_frame.columns}
+    )
+    diag.to_csv(config.OUTPUT_DIR / "diagnostics.csv", index=False)
+    figures.residual_panel(
+        resid_frame, {**labels, "GDP (system sum)": "GDP (system sum)"},
+        config.OUTPUT_DIR / "residual_panel.png"
+    )
+    flagged = diag[diag["ljung_box_p_lag4"] < 0.05]["equation"].tolist()
+    print("\nResidual diagnostics (p-values) written to diagnostics.csv.")
+    if flagged:
+        pretty = ", ".join(labels.get(e, e) for e in flagged)
+        print(f"Ljung-Box p<0.05 at lag 4 for: {pretty}.")
+        print("  Implication: HAC (Newey-West) SEs remain valid for inference on "
+              "the mean parameters,\n  but the static mean model is dynamically "
+              "incomplete - this motivates the state-space\n  trend layer (--stsm, "
+              "Lane B3).")
+    else:
+        print("No equation shows Ljung-Box p<0.05 at lag 4.")
 
     # ---- import-content adjustment (optional) -------------------------
     if import_content_arg is not None:

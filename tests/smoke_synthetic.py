@@ -116,6 +116,14 @@ assert resid.abs().max() < 1e-9, "reconciliation residual not closed"
 result = run_pipeline.main(clv=clv, cp=cp)
 
 assert result.adding_up_gap < 1e-8, "coefficient adding-up property failed"
+
+# diagnostics battery: one row per component + GDP, all five statistics present
+diag = pd.read_csv(config.OUTPUT_DIR / "diagnostics.csv")
+diag_stats = ["ljung_box_p_lag4", "ljung_box_p_lag8", "arch_lm_p_lag4",
+              "jarque_bera_p", "cusum_p"]
+assert len(diag) == result.params.shape[0] + 1, "diagnostics row count wrong"
+assert all(c in diag.columns for c in diag_stats), "diagnostics missing statistics"
+
 outputs = list(config.OUTPUT_DIR.glob("*"))
 assert len(outputs) >= 6, f"expected tables+figures, got {outputs}"
 print(f"\nResidual MAE: exact={mae_exact:.4g}  approx_raw={mae_approx_raw:.4g}")

@@ -142,6 +142,43 @@ def domestic_vs_external(adjusted: pd.DataFrame, gdp_growth: pd.Series, path,
     plt.close(fig)
 
 
+def residual_panel(residuals: pd.DataFrame, labels: dict[str, str], path,
+                   window: int = 12):
+    """Small multiples of residual series with ±2 rolling-σ bands.
+
+    ``residuals`` has one column per equation; the rolling standard deviation
+    (default 12-quarter window) traces time-varying dispersion so
+    heteroskedasticity and outliers read off the panel directly.
+    """
+    cols = list(residuals.columns)
+    n = len(cols)
+    ncols = 3
+    nrows = int(np.ceil(n / ncols))
+    fig, axes = plt.subplots(nrows, ncols, figsize=(11, 2.4 * nrows), sharex=True)
+    axes = np.atleast_2d(axes)
+    t = residuals.index.to_timestamp() if hasattr(residuals.index, "to_timestamp") \
+        else np.arange(len(residuals))
+
+    for k, col in enumerate(cols):
+        ax = axes[k // ncols, k % ncols]
+        r = residuals[col]
+        band = 2 * r.rolling(window, min_periods=window // 2).std()
+        ax.plot(t, r, lw=0.8, color=PALETTE[k % len(PALETTE)])
+        ax.plot(t, band, lw=0.7, color="#888888", ls="--")
+        ax.plot(t, -band, lw=0.7, color="#888888", ls="--")
+        ax.axhline(0, color="black", lw=0.6)
+        ax.set_title(labels.get(col, col), fontsize=8.5)
+    for k in range(n, nrows * ncols):
+        axes[k // ncols, k % ncols].axis("off")
+
+    fig.suptitle("Equation residuals with ±2 rolling-σ bands "
+                 f"({window}-quarter window)", fontsize=10, y=1.0)
+    _credit(fig)
+    fig.tight_layout()
+    fig.savefig(path, bbox_inches="tight")
+    plt.close(fig)
+
+
 def sublayer_stacked(tidy: pd.DataFrame, title: str, path):
     """Stacked annual bars of a parent contribution split by child.
 
