@@ -26,7 +26,8 @@ import pandas as pd
 from statsmodels.tsa.regime_switching.markov_regression import MarkovRegression
 
 
-def fit_markov(series: pd.Series, k_regimes: int = 2, label: str = ""):
+def fit_markov(series: pd.Series, k_regimes: int = 2, label: str = "",
+               seed: int = 20240701):
     """Fit a switching-mean, switching-variance Markov regression.
 
     Returns ``(smoothed_probs, summary)`` where ``smoothed_probs`` is a frame
@@ -34,8 +35,14 @@ def fit_markov(series: pd.Series, k_regimes: int = 2, label: str = ""):
     ``prob_low_growth`` column, and ``summary`` holds the per-regime mean and
     variance and the expected durations. Returns ``(None, None)`` if the model
     does not converge.
+
+    The EM fit uses random restarts (``search_reps``) drawn from NumPy's global
+    RNG; ``seed`` fixes that RNG so the estimates are bit-reproducible across
+    runs. Pass ``seed=None`` to leave the global RNG untouched.
     """
     y = pd.Series(series).dropna()
+    if seed is not None:
+        np.random.seed(seed)
     try:
         res = MarkovRegression(
             y, k_regimes=k_regimes, trend="c", switching_variance=True
