@@ -142,6 +142,39 @@ def domestic_vs_external(adjusted: pd.DataFrame, gdp_growth: pd.Series, path,
     plt.close(fig)
 
 
+def factor_panel(factor_df: pd.DataFrame, loadings_df: pd.DataFrame,
+                 labels: dict[str, str], regimes: dict, path):
+    """Smoothed common factor (regime-shaded) with a loadings bar beneath."""
+    t = factor_df.index.to_timestamp()
+    fig, (ax, ax2) = plt.subplots(2, 1, figsize=(11, 7),
+                                  gridspec_kw={"height_ratios": [2, 1.4]})
+    if factor_df["lo90"].notna().any():
+        ax.fill_between(t, factor_df["lo90"], factor_df["hi90"],
+                        color="#1f6f8b", alpha=0.2, linewidth=0)
+    ax.plot(t, factor_df["factor"], color="#1f6f8b", lw=1.3)
+    ax.axhline(0, color="black", lw=0.7)
+    for (start, end) in regimes.values():
+        ax.axvspan(pd.Period(start, "Q").to_timestamp(),
+                   pd.Period(end, "Q").to_timestamp(),
+                   color="#999999", alpha=0.2, linewidth=0)
+    ax.set_ylabel("common factor (std)")
+    ax.set_title("Portugal - common cycle in the expenditure contributions "
+                 "(smoothed dynamic factor)")
+
+    ld = loadings_df.sort_values("loading")
+    names = [labels.get(c, c) for c in ld["component"]]
+    y = np.arange(len(ld))
+    colors = ["#bc4749" if v < 0 else "#6a994e" for v in ld["loading"]]
+    ax2.barh(y, ld["loading"].to_numpy(), color=colors, height=0.6)
+    ax2.set_yticks(y, names, fontsize=8)
+    ax2.axvline(0, color="black", lw=0.7)
+    ax2.set_xlabel("loading on the common factor")
+    _credit(fig)
+    fig.tight_layout()
+    fig.savefig(path, bbox_inches="tight")
+    plt.close(fig)
+
+
 def quantile_coefficients(gdp_paths: pd.DataFrame, ols_params, path):
     """Coefficient paths across quantiles for the GDP-growth equation.
 

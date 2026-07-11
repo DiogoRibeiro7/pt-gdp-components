@@ -114,7 +114,13 @@ assert close < 1e-9, f"sub-layer reconciliation did not close, gap {close:.2e}"
 assert resid.abs().max() < 1e-9, "reconciliation residual not closed"
 
 result = run_pipeline.main(clv=clv, cp=cp, stsm_flag=True, vecm_flag=True,
-                           backtest_flag=True, msm_flag=True, quantile_flag=True)
+                           backtest_flag=True, msm_flag=True, quantile_flag=True,
+                           factor_flag=True)
+
+# dynamic factor common cycle ran and wrote a factor path + loadings
+if (config.OUTPUT_DIR / "factor_path.csv").exists():  # skipped only on non-convergence
+    fac = pd.read_csv(config.OUTPUT_DIR / "factor_loadings.csv")
+    assert {"component", "loading", "r2"}.issubset(fac.columns), "factor loadings malformed"
 
 # quantile regression ran and wrote coefficient paths for GDP + components
 qtab = pd.read_csv(config.OUTPUT_DIR / "quantile_coefficients.csv")

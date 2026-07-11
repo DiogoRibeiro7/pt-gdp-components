@@ -13,8 +13,9 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 import pandas as pd
 
-from ptgdp import (backtest, config, diagnostics, fetch, figures, import_content,
-                   model, msm, prepare, quantile, stsm, sublayer, vecm)
+from ptgdp import (backtest, config, diagnostics, factor, fetch, figures,
+                   import_content, model, msm, prepare, quantile, stsm, sublayer,
+                   vecm)
 
 
 def main(refresh: bool = False, clv: pd.DataFrame | None = None,
@@ -22,7 +23,8 @@ def main(refresh: bool = False, clv: pd.DataFrame | None = None,
          import_content_arg=None, sublayer_flag: bool = False,
          stsm_flag: bool = False, stsm_seasonal: bool = False,
          vecm_flag: bool = False, backtest_flag: bool = False,
-         msm_flag: bool = False, quantile_flag: bool = False):
+         msm_flag: bool = False, quantile_flag: bool = False,
+         factor_flag: bool = False):
     config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     if clv is None:
@@ -209,13 +211,34 @@ def main(refresh: bool = False, clv: pd.DataFrame | None = None,
             config.OUTPUT_DIR / "quantile_coefficients.png"
         )
         print("\nQuantile regression (GDP growth) - regime effects across quantiles:")
-        for reg in [r for r in config.REGIMES]:
+        for reg in list(config.REGIMES):
             row = gdp_paths[gdp_paths["regressor"] == reg]
             if not row.empty:
                 lo = row[row["tau"] == row["tau"].min()]["coef"].iloc[0]
                 hi = row[row["tau"] == row["tau"].max()]["coef"].iloc[0]
                 print(f"  {reg:<10} q10={lo:+.3f}  q90={hi:+.3f}  "
                       f"(OLS mean {result.gdp_params[reg]:+.3f})")
+
+    # ---- dynamic factor common cycle (optional) ----------------------
+    if factor_flag:
+        factor_df, loadings_df, mean_r2 = factor.fit_factor(contrib)
+        if factor_df is not None:
+            out = factor_df.copy()
+            out.index = out.index.astype(str)
+            out.to_csv(config.OUTPUT_DIR / "factor_path.csv")
+            loadings_df.to_csv(config.OUTPUT_DIR / "factor_loadings.csv", index=False)
+            figures.factor_panel(
+                factor_df, loadings_df, labels, config.REGIMES,
+                config.OUTPUT_DIR / "factor_panel.png"
+            )
+            print(f"\nDynamic factor: common cycle tracks on average "
+                  f"{100 * mean_r2:.1f}% of component variance.")
+            top = loadings_df.reindex(
+                loadings_df["loading"].abs().sort_values(ascending=False).index
+            ).head(3)
+            for _, r in top.iterrows():
+                print(f"  {labels.get(r['component'], r['component']):<32} "
+                      f"loading={r['loading']:+.3f}  R2={r['r2']:.2f}")
 
     # ---- Markov-switching endogenous regimes (optional) --------------
     if msm_flag:
@@ -266,9 +289,11 @@ if __name__ == "__main__":
                     help="Markov-switching endogenous regime dating on GDP growth")
     ap.add_argument("--quantile", action="store_true",
                     help="quantile regression of the design across the growth distribution")
+    ap.add_argument("--factor", action="store_true",
+                    help="dynamic factor model: common cycle across the contributions")
     args = ap.parse_args()
     main(refresh=args.refresh, interactions=args.interactions,
          import_content_arg=args.import_content, sublayer_flag=args.sublayer,
          stsm_flag=args.stsm, stsm_seasonal=args.stsm_seasonal,
          vecm_flag=args.vecm, backtest_flag=args.backtest, msm_flag=args.msm,
-         quantile_flag=args.quantile)
+         quantile_flag=args.quantile, factor_flag=args.factor)
