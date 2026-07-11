@@ -142,6 +142,42 @@ def domestic_vs_external(adjusted: pd.DataFrame, gdp_growth: pd.Series, path,
     plt.close(fig)
 
 
+def quantile_coefficients(gdp_paths: pd.DataFrame, ols_params, path):
+    """Coefficient paths across quantiles for the GDP-growth equation.
+
+    One small-multiple panel per non-intercept regressor: the quantile
+    coefficient with its 95% band, and a dashed line at the OLS mean estimate
+    so the fan-out (asymmetry) reads directly against the mean model.
+    """
+    regs = [r for r in gdp_paths["regressor"].unique() if r != "const"]
+    n = len(regs)
+    ncols = min(3, n) or 1
+    nrows = int(np.ceil(n / ncols))
+    fig, axes = plt.subplots(nrows, ncols, figsize=(3.6 * ncols, 3.0 * nrows),
+                             squeeze=False)
+    for k, reg in enumerate(regs):
+        ax = axes[k // ncols, k % ncols]
+        sub = gdp_paths[gdp_paths["regressor"] == reg].sort_values("tau")
+        tau = sub["tau"].to_numpy()
+        ax.fill_between(tau, sub["ci_low"], sub["ci_high"],
+                        color=PALETTE[k % len(PALETTE)], alpha=0.2, linewidth=0)
+        ax.plot(tau, sub["coef"], marker="o", ms=3, lw=1.4,
+                color=PALETTE[k % len(PALETTE)])
+        if ols_params is not None and reg in ols_params.index:
+            ax.axhline(float(ols_params[reg]), color="black", lw=1.0, ls="--")
+        ax.axhline(0, color="#888888", lw=0.6)
+        ax.set_title(reg, fontsize=9)
+        ax.set_xlabel("quantile")
+    for k in range(n, nrows * ncols):
+        axes[k // ncols, k % ncols].axis("off")
+    fig.suptitle("GDP-growth equation - quantile coefficients (95% band) vs "
+                 "OLS mean (dashed)", fontsize=10, y=1.0)
+    _credit(fig)
+    fig.tight_layout()
+    fig.savefig(path, bbox_inches="tight")
+    plt.close(fig)
+
+
 def markov_probabilities(probs: pd.DataFrame, gdp_growth: pd.Series,
                          regimes: dict, path):
     """Smoothed low-growth-regime probability with fixed regime windows shaded.

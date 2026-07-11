@@ -114,7 +114,12 @@ assert close < 1e-9, f"sub-layer reconciliation did not close, gap {close:.2e}"
 assert resid.abs().max() < 1e-9, "reconciliation residual not closed"
 
 result = run_pipeline.main(clv=clv, cp=cp, stsm_flag=True, vecm_flag=True,
-                           backtest_flag=True, msm_flag=True)
+                           backtest_flag=True, msm_flag=True, quantile_flag=True)
+
+# quantile regression ran and wrote coefficient paths for GDP + components
+qtab = pd.read_csv(config.OUTPUT_DIR / "quantile_coefficients.csv")
+assert {"equation", "tau", "regressor", "coef"}.issubset(qtab.columns)
+assert (qtab["equation"] == "GDP (system sum)").any(), "quantile GDP paths missing"
 
 # Markov-switching regime dating ran and wrote smoothed probabilities
 msm_csv = config.OUTPUT_DIR / "msm_probabilities.csv"

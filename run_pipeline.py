@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 import pandas as pd
 
 from ptgdp import (backtest, config, diagnostics, fetch, figures, import_content,
-                   model, msm, prepare, stsm, sublayer, vecm)
+                   model, msm, prepare, quantile, stsm, sublayer, vecm)
 
 
 def main(refresh: bool = False, clv: pd.DataFrame | None = None,
@@ -22,7 +22,7 @@ def main(refresh: bool = False, clv: pd.DataFrame | None = None,
          import_content_arg=None, sublayer_flag: bool = False,
          stsm_flag: bool = False, stsm_seasonal: bool = False,
          vecm_flag: bool = False, backtest_flag: bool = False,
-         msm_flag: bool = False):
+         msm_flag: bool = False, quantile_flag: bool = False):
     config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     if clv is None:
@@ -199,6 +199,24 @@ def main(refresh: bool = False, clv: pd.DataFrame | None = None,
               "benchmark; a decomposition\nthat cannot beat AR(1) is a "
               "specification check passed, not a forecasting win.")
 
+    # ---- quantile regression (optional) ------------------------------
+    if quantile_flag:
+        qtab = quantile.quantile_table(contrib, gdp_growth, X)
+        qtab.to_csv(config.OUTPUT_DIR / "quantile_coefficients.csv", index=False)
+        gdp_paths = qtab[qtab["equation"] == "GDP (system sum)"]
+        figures.quantile_coefficients(
+            gdp_paths, result.gdp_params,
+            config.OUTPUT_DIR / "quantile_coefficients.png"
+        )
+        print("\nQuantile regression (GDP growth) - regime effects across quantiles:")
+        for reg in [r for r in config.REGIMES]:
+            row = gdp_paths[gdp_paths["regressor"] == reg]
+            if not row.empty:
+                lo = row[row["tau"] == row["tau"].min()]["coef"].iloc[0]
+                hi = row[row["tau"] == row["tau"].max()]["coef"].iloc[0]
+                print(f"  {reg:<10} q10={lo:+.3f}  q90={hi:+.3f}  "
+                      f"(OLS mean {result.gdp_params[reg]:+.3f})")
+
     # ---- Markov-switching endogenous regimes (optional) --------------
     if msm_flag:
         probs, msm_summary = msm.fit_markov(gdp_growth, k_regimes=2, label="GDP")
@@ -246,8 +264,11 @@ if __name__ == "__main__":
                     help="expanding-window one-step-ahead GDP-growth backtest")
     ap.add_argument("--msm", action="store_true",
                     help="Markov-switching endogenous regime dating on GDP growth")
+    ap.add_argument("--quantile", action="store_true",
+                    help="quantile regression of the design across the growth distribution")
     args = ap.parse_args()
     main(refresh=args.refresh, interactions=args.interactions,
          import_content_arg=args.import_content, sublayer_flag=args.sublayer,
          stsm_flag=args.stsm, stsm_seasonal=args.stsm_seasonal,
-         vecm_flag=args.vecm, backtest_flag=args.backtest, msm_flag=args.msm)
+         vecm_flag=args.vecm, backtest_flag=args.backtest, msm_flag=args.msm,
+         quantile_flag=args.quantile)
