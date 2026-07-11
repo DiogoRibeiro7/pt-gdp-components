@@ -61,7 +61,7 @@ def load_all(refresh: bool = False) -> tuple[pd.DataFrame, pd.DataFrame]:
 
 # Annual breakdown datasets and the DBnomics dimension carrying their split.
 _ANNUAL_DATASETS = {
-    "nama_10_an6": "asset",       # GFCF by AN_F6 asset type
+    "nama_10_an6": "asset10",     # GFCF by AN_F6 asset type (gross, "*G" codes)
     "nama_10_co3_p3": "coicop",   # household consumption by COICOP purpose
 }
 
@@ -69,9 +69,10 @@ _ANNUAL_DATASETS = {
 def fetch_annual(dataset: str, items: list[str], unit: str) -> pd.DataFrame:
     """Fetch an annual Eurostat breakdown (chain-linked volumes) via DBnomics.
 
-    Supports ``nama_10_an6`` (GFCF by AN_F6 asset: N111, N112, N1131, N1132,
-    N11O, N115, N117 and relatives) and ``nama_10_co3_p3`` (household
-    consumption by COICOP CP01..CP12), geo=PT. The data is annual and is
+    Supports ``nama_10_an6`` (GFCF by AN_F6 asset, gross ``*G`` codes such as
+    N111G, N112G, N1131G, N1132G, N11OG, N115G, N117G, on the ``asset10``
+    dimension) and ``nama_10_co3_p3`` (household consumption by COICOP
+    CP01..CP12), geo=PT. The data is annual and is
     returned as annual (year-indexed) — it is never interpolated to quarterly,
     since interpolation would invent within-year dynamics the source does not
     contain. The breakdown codes actually present in the response are logged;

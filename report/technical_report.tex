@@ -51,6 +51,12 @@ Gross contributions treat imports as a single negative block, which understates 
 \section{Deeper granularity}
 Two annual breakdowns add resolution the quarterly ten-component layer cannot carry: gross fixed capital formation by asset type (\texttt{nama\_10\_an6}) and household consumption by COICOP purpose (\texttt{nama\_10\_co3\_p3}). Because these source series are annual, they are used at annual frequency and never interpolated to quarterly. Each year's parent contribution is split across its children in proportion to the children's annual volume changes, with the non-additivity of the child breakdown reallocated proportionally so the split closes onto the parent contribution. The layer is strictly additive to the existing decomposition and leaves the quarterly system untouched; it answers 'which assets' and 'which purposes' without disturbing the 'which components' answer above.
 \begin{figure}[H]\centering
+\includegraphics[width=\linewidth]{../output/gfcf_by_asset.png}
+\caption{GFCF contribution split by asset type, annual}
+\end{figure}
+
+
+\begin{figure}[H]\centering
 \includegraphics[width=\linewidth]{../output/consumption_by_purpose.png}
 \caption{Household consumption contribution split by COICOP purpose, annual}
 \end{figure}

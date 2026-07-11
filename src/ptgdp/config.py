@@ -48,7 +48,7 @@ REGIMES = {
 SUBLAYERS = {
     "P51G": {
         "dataset": "nama_10_an6",
-        "items": ["N111", "N112", "N1131", "N1132", "N11O", "N115", "N117"],
+        "items": ["N111G", "N112G", "N1131G", "N1132G", "N11OG", "N115G", "N117G"],
         "csv": "gfcf_by_asset.csv",
         "title": "Portugal - GFCF contribution split by asset type",
     },

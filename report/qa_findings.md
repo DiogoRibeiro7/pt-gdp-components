@@ -48,14 +48,13 @@ treated as numerically zero). The checker passes clean after the fixes below.
    may misread it. Proposed fix (not auto-applied): add a half-sentence noting
    the trend is the baseline-regime slope when interactions are active.
 
-5. **Granularity section describes an unavailable breakdown — §5.** The section
-   describes both the GFCF-by-asset (`nama_10_an6`) and COICOP consumption
-   (`nama_10_co3_p3`) breakdowns, but only the consumption figure is produced in
-   this run: the annual GFCF-by-asset series returned no data from the current
-   DBnomics mirror, so the layer was logged-and-skipped. The figure list
-   honestly shows only what exists, but the prose reads as if both materialised.
-   Proposed fix (not auto-applied): have the generator note when a sub-layer
-   breakdown was requested but returned no data.
+5. **Granularity section — RESOLVED.** An earlier draft produced only the
+   consumption figure because the GFCF-by-asset fetch returned empty. The root
+   cause was a wrong DBnomics dimension name (`asset`, corrected to `asset10`)
+   and asset codes missing the gross `*G` suffix (corrected to `N111G, N112G,
+   N1131G, N1132G, N11OG, N115G, N117G`). Both breakdowns now fetch and
+   reconcile (max reconciliation residual ~1e-16), so §5 shows both figures and
+   the prose is accurate. No longer an open item.
 
 6. **Error-correction language — §6 (VECM).** "The component that moves most to
    correct a departure from the long-run configuration" uses standard VECM
