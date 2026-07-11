@@ -113,6 +113,9 @@ _BIBLIOGRAPHY = r"""\begin{thebibliography}{99}
 \bibitem{harvey1989} Harvey, A. C. (1989). \emph{Forecasting, Structural Time Series Models and the Kalman Filter}. Cambridge University Press, Cambridge.
 \bibitem{johansen1991} Johansen, S. (1991). Estimation and hypothesis testing of cointegration vectors in Gaussian vector autoregressive models. \emph{Econometrica} 59(6), 1551--1580.
 \bibitem{dm1995} Diebold, F. X. and Mariano, R. S. (1995). Comparing predictive accuracy. \emph{Journal of Business \& Economic Statistics} 13(3), 253--263.
+\bibitem{hamilton1989} Hamilton, J. D. (1989). A new approach to the economic analysis of nonstationary time series and the business cycle. \emph{Econometrica} 57(2), 357--384.
+\bibitem{koenkerbassett1978} Koenker, R. and Bassett, G. (1978). Regression quantiles. \emph{Econometrica} 46(1), 33--50.
+\bibitem{stockwatson2011} Stock, J. H. and Watson, M. W. (2011). Dynamic factor models. In \emph{The Oxford Handbook of Economic Forecasting}. Oxford University Press.
 \bibitem{bdp2016} Banco de Portugal (2016). The import content of global demand in Portugal. \emph{Economic Studies}, Vol. II, No. 2.
 \bibitem{statsmodels} Seabold, S. and Perktold, J. (2010). statsmodels: econometric and statistical modeling with Python. In \emph{Proceedings of the 9th Python in Science Conference}, 92--96.
 \end{thebibliography}
@@ -238,6 +241,36 @@ def _gather(result):
     bt = _csv("backtest.csv")
     if bt is not None:
         ctx["bt"] = bt
+
+    msm_reg = _csv("msm_regimes.csv")
+    msm_prob = _csv("msm_probabilities.csv")
+    if msm_reg is not None and msm_prob is not None:
+        low = msm_reg[msm_reg["is_low_growth"]]
+        hi = msm_reg[~msm_reg["is_low_growth"]]
+        if not low.empty and not hi.empty:
+            ctx["msm_low_mean"] = low["mean_growth"].iloc[0]
+            ctx["msm_low_dur"] = low["expected_duration_q"].iloc[0]
+            ctx["msm_hi_mean"] = hi["mean_growth"].iloc[0]
+            ctx["msm_hi_dur"] = hi["expected_duration_q"].iloc[0]
+        ctx["msm_n_recession"] = int((msm_prob["prob_low_growth"] > 0.5).sum())
+        ctx["msm_n_quarters"] = len(msm_prob)
+
+    qt = _csv("quantile_coefficients.csv")
+    if qt is not None:
+        gdp_q = qt[qt["equation"] == "GDP (system sum)"]
+        for reg in ("gfc", "pandemic"):
+            r = gdp_q[gdp_q["regressor"] == reg]
+            if not r.empty:
+                ctx[f"q_{reg}_lo"] = r.loc[r["tau"].idxmin(), "coef"]
+                ctx[f"q_{reg}_hi"] = r.loc[r["tau"].idxmax(), "coef"]
+
+    fac = _csv("factor_loadings.csv")
+    if fac is not None and not fac.empty:
+        ctx["factor_mean_r2"] = float(fac["r2"].mean())
+        top = fac.reindex(fac["loading"].abs().sort_values(ascending=False).index)
+        code = top["component"].iloc[0]
+        ctx["factor_top_comp"] = config.COMPONENTS.get(code, {}).get("label", code)
+        ctx["factor_top_loading"] = top["loading"].iloc[0]
 
     return ctx
 
@@ -565,6 +598,58 @@ def _render(ctx) -> str:
             )
         p.append(bt_txt + "\n")
 
+    # --- Markov-switching endogenous regimes ---
+    if g("msm_low_mean") is not None:
+        p.append(
+            "Where §3 imposes the regime windows by hand, a two-state Markov-switching "
+            "regression [[cite:hamilton1989]] on GDP growth lets the data date them. With "
+            "switching mean and switching variance it separates a low-growth state, mean "
+            f"{_f(g('msm_low_mean'))}% per quarter with an expected duration of "
+            f"{_f(g('msm_low_dur'), 1)} quarters, from a high-growth state, mean "
+            f"{_f(g('msm_hi_mean'))}% and an expected duration of "
+            f"{_f(g('msm_hi_dur'), 1)} quarters. The smoothed probability of the "
+            f"low-growth state exceeds one half in {g('msm_n_recession', 0)} of "
+            f"{g('msm_n_quarters', 0)} quarters; laid over the hand-drawn windows it shows "
+            "where the calendar dating and the data agree and where a downturn the dummies "
+            "never encoded still registers.\n"
+        )
+        p.append(_fig("msm_probabilities.png",
+                      "Smoothed probability of the low-growth regime, fixed windows shaded"))
+
+    # --- Quantile regression ---
+    if g("q_pandemic_lo") is not None:
+        p.append(
+            "The SUR model is a conditional-mean model; quantile regression "
+            "[[cite:koenkerbassett1978]] fits the same design across the conditional "
+            "distribution of growth and exposes the asymmetry the mean hides. The regime "
+            "effects fan out sharply: the pandemic coefficient runs from "
+            f"{_f(g('q_pandemic_lo'))} pp at the tenth percentile to "
+            f"{_f(g('q_pandemic_hi'))} pp at the ninetieth, the collapse-and-rebound "
+            "signature of a shock the OLS mean averages almost to nothing, while the "
+            f"crisis-and-troika effect ranges from {_f(g('q_gfc_lo'))} pp to "
+            f"{_f(g('q_gfc_hi'))} pp. Where a coefficient is flat across quantiles the "
+            "mean is a fair summary; where it fans, the lower tail carries risk the mean "
+            "understates.\n"
+        )
+        p.append(_fig("quantile_coefficients.png",
+                      "GDP-growth quantile coefficients vs the OLS mean"))
+
+    # --- Dynamic factor common cycle ---
+    if g("factor_mean_r2") is not None:
+        p.append(
+            "Finally, a one-factor dynamic factor model [[cite:stockwatson2011]] names the "
+            "co-movement the SUR layer only registers as a singular residual covariance. A "
+            "single latent common cycle, with AR(1) dynamics and idiosyncratic AR(1) noise, "
+            f"accounts on average for an R-squared of {_f(g('factor_mean_r2'), 2)} of the "
+            "component contributions' variation; the strongest loading is on "
+            f"{g('factor_top_comp')} at {_f(g('factor_top_loading'))}. Components "
+            "with large positive loadings move with the broad demand cycle, those near zero "
+            "follow their own path &mdash; a compact reading of how synchronised the "
+            "expenditure side is.\n"
+        )
+        p.append(_fig("factor_panel.png",
+                      "Common cycle in the expenditure contributions with component loadings"))
+
     p.append(
         "Read as a sequence, the dynamics tell one story. The diagnostics say the static "
         "mean model leaves autocorrelation on the table; the state-space slopes show that "
@@ -638,6 +723,7 @@ def main(clv=None, cp=None, matrix_path=None, do_sublayer=None):
     result = run_pipeline.main(
         clv=clv, cp=cp, interactions=True, stsm_flag=True, vecm_flag=True,
         backtest_flag=True, sublayer_flag=do_sublayer, import_content_arg=matrix_path,
+        msm_flag=True, quantile_flag=True, factor_flag=True,
     )
     ctx = _gather(result)
     md = _render(ctx)

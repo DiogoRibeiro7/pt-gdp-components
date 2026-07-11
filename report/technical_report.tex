@@ -86,6 +86,27 @@ The VECM takes the long-run view, working on the log chain-linked-volume levels 
 
 
 The backtest closes the dynamics section with a specification check rather than a forecasting claim: expanding-window, one-quarter-ahead forecasts of GDP growth from 2010Q1, with no look-ahead, under the SUR mean model, a sum of per-component AR(1) forecasts, and a direct AR(1) benchmark. Excluding the pandemic quarters, the SUR mean model posts an RMSE of 0.735 pp against the benchmark's 0.652 pp; over the full window the SUR RMSE is 5.967 pp. The Diebold-Mariano test \cite{dm1995} of the SUR model against the AR(1) benchmark gives a statistic of 1.363 (p = 0.173), and the summed-AR(1) decomposition a statistic of 1.049 (p = 0.294). A positive statistic means the model loses to the benchmark; where the difference is not significant, the honest conclusion is that the decomposition earns its keep as an accounting and inference device, not as a predictor that beats a one-line univariate model out of sample.
+Where §3 imposes the regime windows by hand, a two-state Markov-switching regression \cite{hamilton1989} on GDP growth lets the data date them. With switching mean and switching variance it separates a low-growth state, mean -0.448\% per quarter with an expected duration of 4.3 quarters, from a high-growth state, mean 0.506\% and an expected duration of 32.8 quarters. The smoothed probability of the low-growth state exceeds one half in 15 of 119 quarters; laid over the hand-drawn windows it shows where the calendar dating and the data agree and where a downturn the dummies never encoded still registers.
+\begin{figure}[H]\centering
+\includegraphics[width=\linewidth]{../output/msm_probabilities.png}
+\caption{Smoothed probability of the low-growth regime, fixed windows shaded}
+\end{figure}
+
+
+The SUR model is a conditional-mean model; quantile regression \cite{koenkerbassett1978} fits the same design across the conditional distribution of growth and exposes the asymmetry the mean hides. The regime effects fan out sharply: the pandemic coefficient runs from -17.921 pp at the tenth percentile to 18.117 pp at the ninetieth, the collapse-and-rebound signature of a shock the OLS mean averages almost to nothing, while the crisis-and-troika effect ranges from -2.342 pp to -0.556 pp. Where a coefficient is flat across quantiles the mean is a fair summary; where it fans, the lower tail carries risk the mean understates.
+\begin{figure}[H]\centering
+\includegraphics[width=\linewidth]{../output/quantile_coefficients.png}
+\caption{GDP-growth quantile coefficients vs the OLS mean}
+\end{figure}
+
+
+Finally, a one-factor dynamic factor model \cite{stockwatson2011} names the co-movement the SUR layer only registers as a singular residual covariance. A single latent common cycle, with AR(1) dynamics and idiosyncratic AR(1) noise, accounts on average for an R-squared of 0.65 of the component contributions' variation; the strongest loading is on Imports of goods at -0.938. Components with large positive loadings move with the broad demand cycle, those near zero follow their own path --- a compact reading of how synchronised the expenditure side is.
+\begin{figure}[H]\centering
+\includegraphics[width=\linewidth]{../output/factor_panel.png}
+\caption{Common cycle in the expenditure contributions with component loadings}
+\end{figure}
+
+
 Read as a sequence, the dynamics tell one story. The diagnostics say the static mean model leaves autocorrelation on the table; the state-space slopes show that the underlying drift is genuinely time-varying and pin down the windows in which it is distinguishable from zero; the VECM asks whether the components share a long-run resting configuration and which of them does the correcting; and the backtest disciplines the whole exercise by asking whether any of this structure improves an out-of-sample forecast of headline growth. The four layers answer different questions --- completeness, timing, long-run structure, and predictive content --- and they are deliberately not collapsed into a single number, because each carries its own caveats and each would fail differently.
 \section{Limitations and what would change the conclusions}
 Several choices bound what can be claimed. The chain-linking residual is handled by an exact annual-overlap method with a proportional reallocation of the small remainder; a different reallocation convention would move individual contributions at the second decimal, which is why both conventions are reported side by side. The import-content adjustment is a gross-versus-net reattribution driven entirely by an exogenous input-output matrix; a different vintage would change the domestic-versus-external split, and no claim here survives replacing the placeholder shares with implausible ones. The Johansen rank selection is size-distorted at this sample length and is reported as descriptive with rank sensitivity rather than as a tested number. The state-space slopes are estimated per series, so the adding-up identity that the SUR layer guarantees is broken across the state-space models by design, and the reported per-quarter gap is the honest measure of that break. Finally, nothing in this report is a causal claim: the regime dummies and trends describe conditional means with HAC-valid standard errors, the word 'significant' is used only where a named test supports it, and the backtest is a specification check, not a forecast people should trade on.
@@ -101,6 +122,9 @@ It is worth being concrete about what would overturn, rather than merely nudge, 
 \bibitem{harvey1989} Harvey, A. C. (1989). \emph{Forecasting, Structural Time Series Models and the Kalman Filter}. Cambridge University Press, Cambridge.
 \bibitem{johansen1991} Johansen, S. (1991). Estimation and hypothesis testing of cointegration vectors in Gaussian vector autoregressive models. \emph{Econometrica} 59(6), 1551--1580.
 \bibitem{dm1995} Diebold, F. X. and Mariano, R. S. (1995). Comparing predictive accuracy. \emph{Journal of Business \& Economic Statistics} 13(3), 253--263.
+\bibitem{hamilton1989} Hamilton, J. D. (1989). A new approach to the economic analysis of nonstationary time series and the business cycle. \emph{Econometrica} 57(2), 357--384.
+\bibitem{koenkerbassett1978} Koenker, R. and Bassett, G. (1978). Regression quantiles. \emph{Econometrica} 46(1), 33--50.
+\bibitem{stockwatson2011} Stock, J. H. and Watson, M. W. (2011). Dynamic factor models. In \emph{The Oxford Handbook of Economic Forecasting}. Oxford University Press.
 \bibitem{bdp2016} Banco de Portugal (2016). The import content of global demand in Portugal. \emph{Economic Studies}, Vol. II, No. 2.
 \bibitem{statsmodels} Seabold, S. and Perktold, J. (2010). statsmodels: econometric and statistical modeling with Python. In \emph{Proceedings of the 9th Python in Science Conference}, 92--96.
 \end{thebibliography}

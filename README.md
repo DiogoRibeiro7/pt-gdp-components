@@ -54,6 +54,9 @@ python run_pipeline.py --stsm            # state-space time-varying slope paths
 python run_pipeline.py --vecm            # Johansen + VECM long-run structure
 python run_pipeline.py --backtest        # pseudo-out-of-sample evaluation
 python run_pipeline.py --import-content[=matrix.csv]   # domestic vs external demand
+python run_pipeline.py --msm             # Markov-switching endogenous regime dating
+python run_pipeline.py --quantile        # quantile regression across the growth distribution
+python run_pipeline.py --factor          # dynamic factor common cycle
 ```
 
 ## Technical report
