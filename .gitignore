@@ -6,3 +6,12 @@ __pycache__/
 .venv/
 venv/
 data/
+
+# LaTeX build artifacts (keep the .tex source only)
+report/*.aux
+report/*.log
+report/*.out
+report/*.pdf
+report/*.fls
+report/*.fdb_latexmk
+report/*.synctex.gz

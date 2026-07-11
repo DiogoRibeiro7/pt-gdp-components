@@ -45,6 +45,31 @@ python run_pipeline.py             # re-runs from cache
 python tests/smoke_synthetic.py    # offline end-to-end check
 ```
 
+Optional analytical layers (each writes to `output/`):
+
+```bash
+python run_pipeline.py --interactions   # regime-specific trend slopes + Wald tests
+python run_pipeline.py --sublayer        # annual GFCF-by-asset / COICOP breakdowns
+python run_pipeline.py --stsm            # state-space time-varying slope paths
+python run_pipeline.py --vecm            # Johansen + VECM long-run structure
+python run_pipeline.py --backtest        # pseudo-out-of-sample evaluation
+python run_pipeline.py --import-content[=matrix.csv]   # domestic vs external demand
+```
+
+## Technical report
+
+`run_report.py` runs the full pipeline (all layers on; the import-content
+section only when a matrix CSV is supplied) and renders a LaTeX report from the
+computed artifacts — no results are hardcoded, and every figure it references
+is verified to exist in `output/` first.
+
+```bash
+python run_report.py                                   # real data, cached
+python run_report.py --import-content=import_content_example.csv  # include §4
+python tests/smoke_report.py                           # offline render check
+cd report && pdflatex technical_report.tex             # build the PDF
+```
+
 ## Extending granularity
 
 - GFCF by asset type: `nama_10_an6` (annual) — dwellings, other

@@ -135,9 +135,14 @@ def main(refresh: bool = False, clv: pd.DataFrame | None = None,
         for parent, spec in config.SUBLAYERS.items():
             if parent not in contrib.columns:
                 continue
-            child_levels = fetch.fetch_annual(
-                spec["dataset"], spec["items"], config.UNIT_CLV
-            )
+            try:
+                child_levels = fetch.fetch_annual(
+                    spec["dataset"], spec["items"], config.UNIT_CLV
+                )
+            except Exception as exc:  # noqa: BLE001 - annual fetch is best-effort
+                print(f"Sub-layer {parent}: skipped ({spec['dataset']} fetch "
+                      f"failed: {exc})")
+                continue
             tidy, residual = sublayer.within_component_decomposition(
                 contrib[parent], child_levels
             )
