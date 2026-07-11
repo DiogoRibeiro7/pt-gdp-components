@@ -142,6 +142,40 @@ def domestic_vs_external(adjusted: pd.DataFrame, gdp_growth: pd.Series, path,
     plt.close(fig)
 
 
+def markov_probabilities(probs: pd.DataFrame, gdp_growth: pd.Series,
+                         regimes: dict, path):
+    """Smoothed low-growth-regime probability with fixed regime windows shaded.
+
+    Overlays the hand-drawn regime windows so agreement (and disagreement)
+    between the data-dated recession probability and the fixed dummies is
+    visible at a glance.
+    """
+    t = probs.index.to_timestamp()
+    fig, (ax, ax2) = plt.subplots(2, 1, figsize=(11, 6), sharex=True,
+                                  gridspec_kw={"height_ratios": [2, 1]})
+    ax.fill_between(t, 0, probs["prob_low_growth"], color="#bc4749", alpha=0.5,
+                    linewidth=0)
+    ax.plot(t, probs["prob_low_growth"], color="#bc4749", lw=1.2)
+    ax.axhline(0.5, color="black", lw=0.7, ls="--")
+    for (start, end) in regimes.values():
+        ax.axvspan(pd.Period(start, "Q").to_timestamp(),
+                   pd.Period(end, "Q").to_timestamp(),
+                   color="#999999", alpha=0.2, linewidth=0)
+    ax.set_ylabel("P(low-growth regime)")
+    ax.set_ylim(0, 1)
+    ax.set_title("Portugal - smoothed probability of the low-growth regime "
+                 "(fixed regime windows shaded)")
+
+    g = gdp_growth.loc[probs.index]
+    ax2.plot(t, g.to_numpy(), color="#1f6f8b", lw=1.0)
+    ax2.axhline(0, color="black", lw=0.7)
+    ax2.set_ylabel("GDP growth (%)")
+    _credit(fig)
+    fig.tight_layout()
+    fig.savefig(path, bbox_inches="tight")
+    plt.close(fig)
+
+
 def slope_paths(frames: dict, gdp_frame, labels: dict[str, str], regimes: dict,
                 path):
     """Small multiples of smoothed state-space slope paths with 90% bands.

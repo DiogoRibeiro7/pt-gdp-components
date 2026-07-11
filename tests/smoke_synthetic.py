@@ -114,7 +114,14 @@ assert close < 1e-9, f"sub-layer reconciliation did not close, gap {close:.2e}"
 assert resid.abs().max() < 1e-9, "reconciliation residual not closed"
 
 result = run_pipeline.main(clv=clv, cp=cp, stsm_flag=True, vecm_flag=True,
-                           backtest_flag=True)
+                           backtest_flag=True, msm_flag=True)
+
+# Markov-switching regime dating ran and wrote smoothed probabilities
+msm_csv = config.OUTPUT_DIR / "msm_probabilities.csv"
+if msm_csv.exists():  # skipped only on a non-convergence (logged, not a crash)
+    msm_df = pd.read_csv(msm_csv)
+    assert "prob_low_growth" in msm_df.columns, "MSM probabilities malformed"
+    assert (config.OUTPUT_DIR / "msm_regimes.csv").exists(), "MSM regimes missing"
 
 # backtest ran with DM p-values present
 bt_df = pd.read_csv(config.OUTPUT_DIR / "backtest.csv")

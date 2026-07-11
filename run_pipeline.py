@@ -14,14 +14,15 @@ sys.path.insert(0, str(Path(__file__).parent / "src"))
 import pandas as pd
 
 from ptgdp import (backtest, config, diagnostics, fetch, figures, import_content,
-                   model, prepare, stsm, sublayer, vecm)
+                   model, msm, prepare, stsm, sublayer, vecm)
 
 
 def main(refresh: bool = False, clv: pd.DataFrame | None = None,
          cp: pd.DataFrame | None = None, interactions: bool = False,
          import_content_arg=None, sublayer_flag: bool = False,
          stsm_flag: bool = False, stsm_seasonal: bool = False,
-         vecm_flag: bool = False, backtest_flag: bool = False):
+         vecm_flag: bool = False, backtest_flag: bool = False,
+         msm_flag: bool = False):
     config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     if clv is None:
@@ -198,6 +199,28 @@ def main(refresh: bool = False, clv: pd.DataFrame | None = None,
               "benchmark; a decomposition\nthat cannot beat AR(1) is a "
               "specification check passed, not a forecasting win.")
 
+    # ---- Markov-switching endogenous regimes (optional) --------------
+    if msm_flag:
+        probs, msm_summary = msm.fit_markov(gdp_growth, k_regimes=2, label="GDP")
+        if probs is not None:
+            out = probs.copy()
+            out.index = out.index.astype(str)
+            out.to_csv(config.OUTPUT_DIR / "msm_probabilities.csv")
+            msm_summary.to_csv(config.OUTPUT_DIR / "msm_regimes.csv", index=False)
+            figures.markov_probabilities(
+                probs, gdp_growth, config.REGIMES,
+                config.OUTPUT_DIR / "msm_probabilities.png"
+            )
+            hi = probs["prob_low_growth"] > 0.5
+            n_rec = int(hi.sum())
+            print(f"\nMarkov-switching: {n_rec} quarters with P(low-growth) > 0.5.")
+            low = msm_summary[msm_summary["is_low_growth"]].iloc[0]
+            hi_r = msm_summary[~msm_summary["is_low_growth"]].iloc[0]
+            print(f"  low-growth regime mean={low['mean_growth']:.3f}%, "
+                  f"expected duration {low['expected_duration_q']:.1f}q; "
+                  f"high-growth mean={hi_r['mean_growth']:.3f}%, "
+                  f"expected duration {hi_r['expected_duration_q']:.1f}q.")
+
     print(f"\nOutputs written to {config.OUTPUT_DIR}")
     return result
 
@@ -221,8 +244,10 @@ if __name__ == "__main__":
                     help="Johansen + VECM on log CLV component levels")
     ap.add_argument("--backtest", action="store_true",
                     help="expanding-window one-step-ahead GDP-growth backtest")
+    ap.add_argument("--msm", action="store_true",
+                    help="Markov-switching endogenous regime dating on GDP growth")
     args = ap.parse_args()
     main(refresh=args.refresh, interactions=args.interactions,
          import_content_arg=args.import_content, sublayer_flag=args.sublayer,
          stsm_flag=args.stsm, stsm_seasonal=args.stsm_seasonal,
-         vecm_flag=args.vecm, backtest_flag=args.backtest)
+         vecm_flag=args.vecm, backtest_flag=args.backtest, msm_flag=args.msm)
