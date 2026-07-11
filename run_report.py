@@ -103,6 +103,22 @@ def _inline(s: str) -> str:
     return "".join(out)
 
 
+_BIBLIOGRAPHY = r"""\begin{thebibliography}{99}
+\bibitem{eurostatqna} Eurostat (2013). \emph{Handbook on Quarterly National Accounts}. Publications Office of the European Union, Luxembourg.
+\bibitem{kruskal1968} Kruskal, W. (1968). When are Gauss-Markov and least squares estimators identical? A coordinate-free approach. \emph{The Annals of Mathematical Statistics} 39(1), 70--75.
+\bibitem{neweywest1987} Newey, W. K. and West, K. D. (1987). A simple, positive semi-definite, heteroskedasticity and autocorrelation consistent covariance matrix. \emph{Econometrica} 55(3), 703--708.
+\bibitem{ljungbox1978} Ljung, G. M. and Box, G. E. P. (1978). On a measure of lack of fit in time series models. \emph{Biometrika} 65(2), 297--303.
+\bibitem{engle1982} Engle, R. F. (1982). Autoregressive conditional heteroscedasticity with estimates of the variance of United Kingdom inflation. \emph{Econometrica} 50(4), 987--1007.
+\bibitem{plobergerkramer1992} Ploberger, W. and Kr\"amer, W. (1992). The CUSUM test with OLS residuals. \emph{Econometrica} 60(2), 271--285.
+\bibitem{harvey1989} Harvey, A. C. (1989). \emph{Forecasting, Structural Time Series Models and the Kalman Filter}. Cambridge University Press, Cambridge.
+\bibitem{johansen1991} Johansen, S. (1991). Estimation and hypothesis testing of cointegration vectors in Gaussian vector autoregressive models. \emph{Econometrica} 59(6), 1551--1580.
+\bibitem{dm1995} Diebold, F. X. and Mariano, R. S. (1995). Comparing predictive accuracy. \emph{Journal of Business \& Economic Statistics} 13(3), 253--263.
+\bibitem{bdp2016} Banco de Portugal (2016). The import content of global demand in Portugal. \emph{Economic Studies}, Vol. II, No. 2.
+\bibitem{statsmodels} Seabold, S. and Perktold, J. (2010). statsmodels: econometric and statistical modeling with Python. In \emph{Proceedings of the 9th Python in Science Conference}, 92--96.
+\end{thebibliography}
+"""
+
+
 def _md_to_latex(md: str, title: str) -> str:
     """Render the markdown-shaped report body as a standalone LaTeX document."""
     out = []
@@ -126,8 +142,13 @@ def _md_to_latex(md: str, title: str) -> str:
             out.append(_inline(line))
         else:
             out.append("")
+    body = "\n".join(out)
+    # [[cite:key]] markers survive escaping intact; turn them into \cite now.
+    # (tolerate an escaped underscore in a key, e.g. from _esc, just in case.)
+    body = re.sub(r"\[\[cite:([a-zA-Z0-9\\_]+)\]\]",
+                  lambda m: r"\cite{" + m.group(1).replace("\\_", "_") + "}", body)
     preamble = _LATEX_PREAMBLE % {"title": _esc(title)}
-    return preamble + "\n".join(out) + "\n\\end{document}\n"
+    return preamble + body + "\n" + _BIBLIOGRAPHY + "\\end{document}\n"
 
 
 def _gather(result):
@@ -230,7 +251,8 @@ def _render(ctx) -> str:
         "analytical extensions behind the Portuguese GDP contribution decomposition, "
         "and states what each layer does and does not support. It is generated "
         "directly from the pipeline artifacts; every number below is read from a "
-        "table in `output/` and every figure it shows was produced in the same run.\n"
+        "table in `output/` and every figure it shows was produced in the same run. "
+        "The estimation is carried out in Python with statsmodels [[cite:statsmodels]].\n"
     )
 
     # 1. Data and measurement
@@ -285,22 +307,39 @@ def _render(ctx) -> str:
 
     # 2. Contribution methodology
     p.append("## 2. Contribution methodology\n")
+    ex_max, ap_max = g("res_exact_maxabs"), g("res_approx_maxabs")
+    if ex_max is not None and ap_max is not None and ex_max > ap_max:
+        pref = (
+            "The exact method is preferred not because it always leaves the smaller "
+            "residual &mdash; the ratio form can amplify quarters in which a small "
+            "component's volume swings sharply, and on this sample its maximum residual is "
+            "in fact the larger of the two &mdash; but because its previous-year nominal "
+            "weights are the correct ones for a chain-linked aggregate, whereas the naive "
+            "shortcut's implied reference-year-price weights have no such justification."
+        )
+    else:
+        pref = (
+            "Here the exact method also carries the smaller maximum residual, but more "
+            "fundamentally it is preferred because its previous-year nominal weights are "
+            "the correct ones for a chain-linked aggregate, whereas the naive shortcut's "
+            "implied reference-year-price weights have no such justification."
+        )
     p.append(
         "The default contributions use the annual-overlap exact formula: each "
         "component's quarter-on-quarter volume ratio is weighted by its share of "
         "nominal GDP in the previous calendar year, "
         "`contrib = sign x s_prev x (X_t / X_prev - 1) x 100`, with the nominal "
         "shares taken from annual sums of the current-price frame. This is the additive "
-        "decomposition consistent with a chain-linked Laspeyres aggregate, in which the "
+        "decomposition consistent with a chain-linked Laspeyres aggregate "
+        "[[cite:eurostatqna]], in which the "
         "aggregate within a linking year is a fixed-previous-year-price index and "
         "previous-year nominal shares are therefore the correct weights. The naive "
         "alternative, differencing the volume level and dividing by lagged GDP, is "
         "retained only as a robustness check because it treats volume levels measured in "
-        "reference-year prices as if they were additive across components. The magnitude "
-        "of the difference is not academic: the maximum absolute residual the naive "
-        f"convention leaves ({_f(g('res_approx_maxabs'), 3)} pp) versus the exact one "
-        f"({_f(g('res_exact_maxabs'), 3)} pp) is the size of the accounting error a "
-        "reader would inherit by using the shortcut. Whichever convention is chosen, the "
+        "reference-year prices as if they were additive across components. The two "
+        "conventions leave maximum absolute residuals of "
+        f"{_f(ap_max, 3)} pp (naive) and {_f(ex_max, 3)} pp (exact). " + pref +
+        " Whichever convention is chosen, the "
         "small remaining residual is reallocated proportionally to the absolute size of "
         "each contribution so that the adding-up identity the system model needs holds "
         "by construction rather than by assumption.\n"
@@ -312,8 +351,10 @@ def _render(ctx) -> str:
         "contribution to the aggregate is its own volume change scaled by how large it was, "
         "in money, the year before &mdash; exactly the previous-year nominal share. The "
         "naive difference-over-lagged-GDP shortcut ignores this and implicitly reweights "
-        "components by their reference-year price levels, which is why its residual grows "
-        "with distance from the reference year while the exact method's does not. Reporting "
+        "components by their reference-year price levels, which is why its residual has a "
+        "systematic component that grows with distance from the reference year, a bias the "
+        "exact method does not share (its residual is near-zero on average and driven by "
+        "ratio noise rather than reference-year drift). Reporting "
         "both conventions is not indecision: it lets a reader see the size of the "
         "convention's footprint on any single quarter before deciding whether it matters "
         "for the question at hand.\n"
@@ -328,13 +369,15 @@ def _render(ctx) -> str:
         "dummies for the global financial crisis and troika period (2008Q3&ndash;2013Q4) "
         "and the pandemic (2020Q1&ndash;2021Q4). Because every equation shares the same "
         "regressors, seemingly-unrelated regression collapses to equation-by-equation OLS "
-        "by Kruskal's theorem, and because the dependent variables sum to GDP growth by "
+        "by Kruskal's theorem [[cite:kruskal1968]], and because the dependent variables "
+        "sum to GDP growth by "
         "construction, the component coefficient vectors sum across equations to the "
         "GDP-growth equation coefficients exactly. The adding-up property is therefore "
         "inherited, not imposed, and is verified numerically at run time: in this run the "
         f"maximum discrepancy between the summed component coefficients and the GDP "
         f"coefficients is {_sci(g('adding_up_gap'))}. Inference uses Newey-West HAC "
-        f"standard errors with four lags, the honest choice for quarterly contributions "
+        f"standard errors [[cite:neweywest1987]] with four lags, the honest choice for "
+        f"quarterly contributions "
         "with serial correlation. The estimated GDP-level trend is "
         f"{_f(g('gdp_trend'))} pp of quarterly growth per decade "
         f"(HAC p = {_f(g('gdp_trend_p'))}). The regime means tell the cyclical story the "
@@ -359,8 +402,9 @@ def _render(ctx) -> str:
         "Two properties of this design deserve emphasis because they are easy to "
         "mis-state. First, the equality of SUR and OLS here is exact, not approximate: it "
         "follows from Kruskal's theorem the moment every equation shares an identical "
-        "regressor matrix, so estimating the system buys nothing over ten separate "
-        "regressions except the bookkeeping that keeps the adding-up visible. Second, the "
+        "regressor matrix, so estimating the system buys nothing over the equation-by-"
+        "equation regressions except the bookkeeping that keeps the adding-up visible. "
+        "Second, the "
         "cross-equation residual covariance is singular by construction, because the "
         "component residuals sum to the GDP-equation residual; this is expected and "
         "harmless for a design that never inverts that covariance, and it is reported only "
@@ -386,7 +430,8 @@ def _render(ctx) -> str:
             "from a mechanical exports-minus-imports split to a domestic-versus-external "
             "demand split. The essential caveat is that the import-content matrix is an "
             "exogenous input, not something estimated here: the default shares are a "
-            "clearly flagged placeholder to be replaced with a current input-output "
+            "clearly flagged placeholder derived from Banco de Portugal import-content "
+            "estimates [[cite:bdp2016]], to be replaced with a current input-output "
             "vintage, and the domestic-versus-external conclusion is only as good as that "
             "matrix.\n"
         )
@@ -422,8 +467,9 @@ def _render(ctx) -> str:
     )
     p.append(
         "The diagnostics battery tests each equation's residuals for serial correlation "
-        "(Ljung-Box at lags four and eight), conditional heteroskedasticity (ARCH-LM at "
-        "lag four), non-normality (Jarque-Bera) and parameter stability (a CUSUM test), "
+        "(Ljung-Box at lags four and eight [[cite:ljungbox1978]]), conditional "
+        "heteroskedasticity (ARCH-LM at lag four [[cite:engle1982]]), non-normality "
+        "(Jarque-Bera) and parameter stability (a CUSUM test [[cite:plobergerkramer1992]]), "
         f"all reported as p-values. In this run {lb_txt}, which is the diagnostic with "
         "teeth. The implication is stated without hedging: HAC standard errors remain "
         "valid for inference on the mean parameters even under residual autocorrelation, "
@@ -446,8 +492,9 @@ def _render(ctx) -> str:
     )
     p.append(
         "A few modelling choices in the state-space layer are worth recording. The level "
-        "is specified as a local linear trend &mdash; a stochastic level plus a stochastic "
-        "slope &mdash; which lets both the position and the direction of a series wander "
+        "is specified as a local linear trend [[cite:harvey1989]] &mdash; a stochastic "
+        "level plus a stochastic slope &mdash; which lets both the position and the "
+        "direction of a series wander "
         "rather than forcing a single straight line through three decades of data. The "
         "stochastic seasonal term is off by default because the input is already "
         "seasonally adjusted; it is exposed as a flag only so residual seasonality can be "
@@ -475,7 +522,7 @@ def _render(ctx) -> str:
         f"of the {g('vecm_n_series', 'positive')} strictly positive final-demand components "
         "&mdash; inventories and valuables are excluded because they take non-positive "
         "values and their log is undefined, an exclusion that is logged rather than hidden. "
-        "The Johansen trace test selects a cointegrating rank of "
+        "The Johansen trace test [[cite:johansen1991]] selects a cointegrating rank of "
         f"{g('vecm_rank', 'r')} at the 5% level, but with this many log-level series and "
         "only about 120 quarters the test is badly size-distorted and over-selects, so the "
         f"rank is treated as descriptive and the loadings are reported for ranks "
@@ -500,7 +547,8 @@ def _render(ctx) -> str:
                 f"Excluding the pandemic quarters, the SUR mean model posts an RMSE of "
                 f"{_f(sur['rmse_ex_pandemic'])} pp against the benchmark's "
                 f"{_f(bench['rmse_ex_pandemic'])} pp; over the full window the SUR RMSE is "
-                f"{_f(sur['rmse_full'])} pp. The Diebold-Mariano test of the SUR model "
+                f"{_f(sur['rmse_full'])} pp. The Diebold-Mariano test "
+                f"[[cite:dm1995]] of the SUR model "
                 f"against the AR(1) benchmark gives a statistic of "
                 f"{_f(sur['dm_stat_vs_ar1'])} (p = {_f(sur['dm_pvalue_vs_ar1'])}), "
             )
