@@ -102,3 +102,9 @@ cd report && pdflatex technical_report.tex             # build the PDF
   or a user CSV). The input–output vintage is an input, never fetched.
 - Regime dummies shift means only; interact them with `trend` in
   `prepare.design_matrix` for regime-specific slopes.
+
+## Licence
+
+Code is [MIT](LICENSE). Data, derived tables and manuscript text are
+[CC BY 4.0](LICENSE-DATA.md). Third-party source data keeps its provider's terms — see
+[`LICENSE-DATA.md`](LICENSE-DATA.md).
