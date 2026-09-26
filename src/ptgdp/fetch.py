@@ -8,6 +8,7 @@ them as parquet, and returns tidy wide DataFrames indexed by quarter.
 from __future__ import annotations
 
 import pandas as pd
+from dataexcept import DataLoadingError, FileReadError, FileWriteError, wrapping
 
 from . import config
 
@@ -41,16 +42,25 @@ def fetch_unit(unit: str) -> pd.DataFrame:
 
 def load(unit: str, refresh: bool = False) -> pd.DataFrame:
     """Load from cache if present, otherwise fetch and cache."""
-    config.DATA_DIR.mkdir(parents=True, exist_ok=True)
     cache = config.DATA_DIR / f"namq_10_gdp_{config.GEO}_{unit}.parquet"
-    if cache.exists() and not refresh:
-        df = pd.read_parquet(cache)
-        df.index = pd.PeriodIndex(df.index, freq="Q")
-        return df
+    with wrapping(OSError, FileWriteError, path=str(cache)):
+        config.DATA_DIR.mkdir(parents=True, exist_ok=True)
+    if not refresh:
+        with wrapping(OSError, FileReadError, path=str(cache)):
+            cached = cache.exists()
+        if cached:
+            with (
+                wrapping((OSError, UnicodeError), FileReadError, path=str(cache)),
+                wrapping(ValueError, DataLoadingError, source=str(cache)),
+            ):
+                df = pd.read_parquet(cache)
+            df.index = pd.PeriodIndex(df.index, freq="Q")
+            return df
     df = fetch_unit(unit)
     out = df.copy()
     out.index = out.index.astype(str)
-    out.to_parquet(cache)
+    with wrapping((OSError, UnicodeError), FileWriteError, path=str(cache)):
+        out.to_parquet(cache)
     return df
 
 
