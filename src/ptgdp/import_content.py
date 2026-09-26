@@ -28,7 +28,10 @@ a silently fetched artifact.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pandas as pd
+from dataexcept import DataLoadingError, FileReadError, wrapping
 
 # REPLACE_WITH_CURRENT_VINTAGE — illustrative import-content shares (fraction
 # of each final-demand component sourced from imports), Portugal.
@@ -51,14 +54,18 @@ DEMAND_MAP: dict[str, list[str]] = {
 IMPORT_COLS: tuple[str, ...] = ("P71", "P72")
 
 
-def load_import_content(path) -> dict[str, float]:
+def load_import_content(path: str | Path) -> dict[str, float]:
     """Load a user CSV (columns: component, import_share) overriding defaults.
 
     Any group present in the CSV replaces the default; groups absent from the
     CSV keep their default value. Group names must match the keys of
     ``DEFAULT_IMPORT_CONTENT``.
     """
-    df = pd.read_csv(path)
+    with (
+        wrapping((OSError, UnicodeError), FileReadError, path=str(path)),
+        wrapping(pd.errors.ParserError, DataLoadingError, source=str(path)),
+    ):
+        df = pd.read_csv(path)
     cols = {c.lower(): c for c in df.columns}
     if "component" not in cols or "import_share" not in cols:
         raise ValueError("import-content CSV needs 'component' and 'import_share' columns")

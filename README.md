@@ -45,6 +45,14 @@ python run_pipeline.py             # re-runs from cache
 python tests/smoke_synthetic.py    # offline end-to-end check
 ```
 
+The quarterly Parquet cache and analyst-supplied import-content CSV use
+DataExcept for file errors. A failed read raises `FileReadError`, malformed
+CSV/Parquet data raises `DataLoadingError`, and a failed cache write raises
+`FileWriteError`. The path is available on each exception and the original
+error remains in `original` and `__cause__`. Invalid input columns still
+raise `ValueError`. Run the offline boundary tests with
+`PYTHONPATH=src python -m unittest discover -s tests -p test_dataexcept_io.py`.
+
 Optional analytical layers (each writes to `output/`):
 
 ```bash

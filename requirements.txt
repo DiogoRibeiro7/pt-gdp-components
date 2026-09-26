@@ -1,6 +1,7 @@
 pandas>=2.0
-statsmodels>=0.14
+statsmodels>=0.14,<0.15
 scipy>=1.10
 matplotlib>=3.7
 dbnomics>=1.2
 pyarrow>=14
+dataexcept>=1.7,<2
